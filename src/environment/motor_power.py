@@ -26,7 +26,7 @@ assumption and is not claimed as a direct equation from the paper.
 
 from dataclasses import dataclass
 
-from motor_efficiency_map import MotorEfficiencyMap
+from .motor_efficiency_map import MotorEfficiencyMap
 
 
 @dataclass

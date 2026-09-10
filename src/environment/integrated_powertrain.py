@@ -40,19 +40,23 @@ Battery (Wu convention):
 """
 
 from __future__ import annotations
-
+from .health_model import (
+    BatteryHealthParameters,
+    HealthDegradationModel,
+    MotorHealthParameters,
+)
 from dataclasses import dataclass
 from pathlib import Path
 
-from battery_model import (
+from .battery_model import (
     BatteryElectricalModel,
     BatteryElectricalParameters,
     BatteryState,
 )
-from motor_efficiency_map import MotorEfficiencyMap
-from motor_model import DualMotorModel, DualMotorParameters
-from motor_power import MotorPowerModel
-from vehicle_dynamics import VehicleDynamics, VehicleParameters
+from .motor_efficiency_map import MotorEfficiencyMap
+from .motor_model import DualMotorModel, DualMotorParameters
+from .motor_power import MotorPowerModel
+from .vehicle_dynamics import VehicleDynamics, VehicleParameters
 
 
 @dataclass
@@ -105,6 +109,11 @@ class PowertrainStepResult:
     polarization_voltage_1_v: float
     polarization_voltage_2_v: float
 
+    # Health state after the step
+    battery_soh: float
+    motor1_soh: float
+    motor2_soh: float
+
     # Feasibility
     motor1_feasible: bool
     motor2_feasible: bool
@@ -136,6 +145,20 @@ class IntegratedPowertrain:
         self.motors = DualMotorModel(
             params=motor_parameters,
             wheel_radius_m=self.parameters.wheel_radius_m,
+        )
+
+        self.health_model = HealthDegradationModel(
+            battery_parameters=BatteryHealthParameters(
+                nominal_capacity_ah=self.parameters.battery_capacity_ah,
+            ),
+            motor1_parameters=MotorHealthParameters(
+                rated_power_kw=self.motors.params.motor1.rated_power_kw,
+                rated_efficiency=self.motors.params.motor1.rated_efficiency,
+            ),
+            motor2_parameters=MotorHealthParameters(
+                rated_power_kw=self.motors.params.motor2.rated_power_kw,
+                rated_efficiency=self.motors.params.motor2.rated_efficiency,
+            ),
         )
 
         self.motor1_power = MotorPowerModel(
@@ -302,6 +325,38 @@ class IntegratedPowertrain:
             dt_s=dt_s,
         )
 
+        # --------------------------------------------------------------
+        # 7. Health / degradation update
+        # --------------------------------------------------------------
+
+        self.health_model.update_battery(
+            current_a=battery_current_a,
+            temperature_c=battery_temperature_c,
+            dt_s=dt_s,
+        )
+
+        self.health_model.update_motor1(
+            mechanical_power_kw=motor1_result.mechanical_power_kw,
+            efficiency=(
+                motor1_result.efficiency_percent / 100.0
+                if motor1_result.efficiency_percent > 0.0
+                else 1.0
+            ),
+            dt_s=dt_s,
+        )
+
+        self.health_model.update_motor2(
+            mechanical_power_kw=motor2_result.mechanical_power_kw,
+            efficiency=(
+                motor2_result.efficiency_percent / 100.0
+                if motor2_result.efficiency_percent > 0.0
+                else 1.0
+            ),
+            dt_s=dt_s,
+        )
+
+        health_state = self.health_model.get_health_state()
+
         return PowertrainStepResult(
             velocity_kmh=velocity_kmh,
             target_velocity_kmh=target_velocity_kmh,
@@ -351,6 +406,10 @@ class IntegratedPowertrain:
             polarization_voltage_2_v=(
                 battery_state.polarization_voltage_2_v
             ),
+
+            battery_soh=health_state["battery_soh"],
+            motor1_soh=health_state["motor1_soh"],
+            motor2_soh=health_state["motor2_soh"],
 
             motor1_feasible=motor_result[
                 "motor1_feasible"
