@@ -87,6 +87,18 @@ class MotorPowerModel:
 
         mechanical_power_w = torque_nm * angular_speed
 
+        if mechanical_power_w == 0.0:
+            return MotorPowerResult(
+                speed_rpm=float(speed_rpm),
+                torque_nm=float(torque_nm),
+                angular_speed_rad_s=float(angular_speed),
+                mechanical_power_w=0.0,
+                mechanical_power_kw=0.0,
+                efficiency_percent=0.0,
+                electrical_power_w=0.0,
+                electrical_power_kw=0.0,
+            )
+
         mechanical_power_kw = (
             mechanical_power_w / 1000.0
         )
