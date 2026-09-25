@@ -1,0 +1,94 @@
+
+======================================================================
+PHASE 3B EXPERIMENT: TRUE_PHYSICAL vs BMS_ESTIMATED
+======================================================================
+
+Loaded: SOHTraceAdapter(samples=556, duration=11100.0h)
+Loaded driving cycle: 100 timesteps
+
+----------------------------------------------------------------------
+EXPERIMENT A: TRUE_PHYSICAL MODE
+----------------------------------------------------------------------
+Running 100 steps...
+
+TRUE_PHYSICAL Results:
+  Steps completed:       100
+  Initial battery SOH:   1.000000000
+  Final battery SOH:     0.999985658
+  Battery degradation:   0.000014342
+  Mean sigma_tor:        0.500001
+  Total reward:          9528.557
+  Final motor1 SOH:      0.999999327
+  Final motor2 SOH:      0.999999433
+  Initial SOC:           0.600000
+  Final SOC:             0.593010
+  SOC change:            -0.006990
+
+----------------------------------------------------------------------
+EXPERIMENT B: BMS_ESTIMATED MODE
+----------------------------------------------------------------------
+Running 100 steps...
+
+BMS_ESTIMATED Results:
+  Steps completed:       100
+  Initial battery SOH:   1.000000000
+  Final battery SOH:     0.999985635
+  Battery degradation:   0.000014365
+  Mean sigma_tor:        0.514008
+  Total reward:          9527.838
+  Final motor1 SOH:      0.999999315
+  Final motor2 SOH:      0.999999437
+  Initial SOC:           0.600000
+  Final SOC:             0.592999
+  SOC change:            -0.007001
+
+SOH Estimation Error:
+  Mean EMS-visible SOH (AI): 0.953306675
+  Mean true SOH:             0.999995430
+  MAE:                       0.046688755
+  RMSE:                      0.046688755
+  Max absolute error:        0.046693325
+
+======================================================================
+TRUE vs AI COMPARISON
+======================================================================
+
+EMS Decision Differences:
+  Mean sigma_tor (TRUE):  0.500001
+  Mean sigma_tor (AI):    0.514008
+  Difference:             +0.014007
+  RMS difference:         0.014007
+  Max difference:         0.014008
+
+Battery Degradation:
+  TRUE mode:  0.000014342
+  AI mode:    0.000014365
+  Difference: +0.000000024
+
+Motor Degradation:
+  Motor 1 (TRUE):  0.000000673
+  Motor 1 (AI):    0.000000685
+  Motor 1 Diff:    +0.000000012
+  Motor 2 (TRUE):  0.000000567
+  Motor 2 (AI):    0.000000563
+  Motor 2 Diff:    -0.000000003
+
+SOC Change:
+  TRUE mode:  -0.006990
+  AI mode:    -0.007001
+  Difference: -0.000011
+
+Reward:
+  TRUE mode:  9528.557
+  AI mode:    9527.838
+  Difference: -0.719
+
+======================================================================
+PHASE 3B EXPERIMENT COMPLETE
+======================================================================
+
+[SUCCESS] Motor efficiency map fix enabled full episode execution
+[SUCCESS] Both TRUE and AI experiments completed
+[SUCCESS] AI SOH estimation affects EMS decisions (Delta-sigma RMS = 0.014007)
+[SUCCESS] Physical SOH evolution is independent in both modes
+[SUCCESS] AI SOH error: MAE = 0.046689, RMSE = 0.046689
