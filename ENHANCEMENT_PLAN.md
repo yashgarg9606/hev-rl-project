@@ -1,8 +1,16 @@
 # Research reliability and improvement plan
 
-This plan tracks the sequential enhancement requested on 2026-09-27. Changes are
-reviewed by a planner, an executor and an independent critic. A passing check is
-evidence only for the behavior it exercises, not for publication readiness.
+This plan records the initial sequential enhancement requested on 2026-09-27.
+The subsequent full-repository audit and corrective pass have a separate scope:
+the completed checks below are historical evidence, not a declaration that all
+later-discovered paths were already correct. Changes are reviewed by a planner,
+an executor and an independent critic. A passing check is evidence only for the
+behavior it exercises, not for publication readiness.
+
+See [the audit-remediation record](REMEDIATION.md) for the later corrections and
+their separate acceptance evidence.
+That pass completed with 89 distinct unit tests, exact replay of the 30 recorded
+EMS episodes and unchanged hashes for all 280 protected pre-existing artifacts.
 
 ## Preservation and evaluation rules
 

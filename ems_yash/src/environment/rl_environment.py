@@ -204,6 +204,23 @@ class EnergyManagementEnv(gym.Env):
             dtype=np.float32,
         )
 
+        # Every next observation includes the following transition's demand.
+        # Reject unsupported cycles before an episode can partially advance;
+        # physical infeasibility within these broad bounds is handled by step.
+        for index in range(len(self.cycle) - 1):
+            torque = self.powertrain.vehicle.calculate_wheel_torque(
+                velocity_kmh=float(self.cycle[index, 1]),
+                target_velocity_kmh=float(self.cycle[index + 1, 1]),
+                slope_rad=float(self.cycle[index, 2]),
+                dt=float(self.cycle[index + 1, 0] - self.cycle[index, 0]),
+            )
+            if (not np.isfinite(torque) or abs(torque) > 5000.
+                    or max(self.cycle[index:index + 2, 1]) > 200.):
+                raise ValueError(
+                    f"Driving-cycle transition {index} cannot be represented "
+                    f"in the observation space (wheel torque={torque} Nm)."
+                )
+
         # --------------------------------------------------------------
         # Runtime state
         # --------------------------------------------------------------
@@ -465,6 +482,21 @@ class EnergyManagementEnv(gym.Env):
         )
 
     def step(self, action):
+        """Commit a complete transition or restore the pre-call owned state."""
+        plant_snapshot = self.powertrain._snapshot_dynamic_state()
+        snapshot = (self.current_index, self.current_velocity_kmh,
+                    self.simulation_time_s, self._terminated,
+                    self.current_state.copy(), self._reward_state.copy())
+        try:
+            return self._step(action)
+        except Exception:
+            self.powertrain._restore_dynamic_state(plant_snapshot)
+            (self.current_index, self.current_velocity_kmh,
+             self.simulation_time_s, self._terminated,
+             self.current_state, self._reward_state) = snapshot
+            raise
+
+    def _step(self, action):
         """
         Advance the environment by one driving-cycle timestep.
 

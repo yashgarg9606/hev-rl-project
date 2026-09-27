@@ -4,6 +4,7 @@ import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from src.data.artifacts import save_new_archive
 from src.data.sequence_dataset import load_and_sequence
 
 
@@ -14,6 +15,13 @@ BATTERIES=["B0005","B0006","B0007","B0018"]
 
 
 def main():
+    import argparse
+    global DATA_DIR
+    parser = argparse.ArgumentParser(description="Build NASA histories without overwriting existing sequences")
+    parser.add_argument("--data-dir", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    DATA_DIR = args.data_dir
     all_X=[]
     all_y=[]
     all_batteries=[]
@@ -39,8 +47,8 @@ def main():
     X=np.concatenate(all_X,axis=0)
     y=np.concatenate(all_y,axis=0)
 
-    np.savez_compressed(
-        DATA_DIR/"sequences.npz",
+    save_new_archive(
+        args.output,
         X=X,
         y=y,
         batteries=np.asarray(all_batteries)

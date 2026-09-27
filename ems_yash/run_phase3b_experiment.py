@@ -1,9 +1,9 @@
 """
 Phase 3B Experiment: Compare TRUE_PHYSICAL vs BMS_ESTIMATED modes.
 
-This experiment runs the health-aware deterministic EMS policy in a manual
-step loop (not using the RL environment wrapper) to compare behavior under
-true vs AI-estimated battery SOH.
+This diagnostic runs the deterministic rule through EnergyManagementEnv.
+It compares physical-model health with a separate source-battery trace; those
+are distinct trajectories, not automatically matched estimation targets.
 """
 
 import sys
@@ -15,17 +15,16 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from src.environment.integrated_powertrain import (
-    IntegratedPowertrain,
     IntegratedPowertrainParameters,
-    default_motor_map_paths
 )
+from src.environment.rl_environment import EnergyManagementEnv
 from src.bms_interface.health_interface import SOHSource
 from src.bms_interface.soh_trace_adapter import SOHTraceAdapter
 from src.agent.health_aware_policy import HealthAwareDeterministicPolicy
 
 def load_driving_cycle():
     """Load a simple test driving cycle."""
-    # Simple UDDS-like pattern: acceleration, cruise, deceleration
+    # Explicit synthetic pattern with stops, acceleration and cruise.
     timestep_s = 1.0
     cycle = []
 
@@ -54,122 +53,62 @@ def load_driving_cycle():
     return np.array(cycle)
 
 def run_experiment(soh_source: SOHSource, soh_adapter, cycle, episode_length=100):
-    """Run one complete episode with specified SOH source."""
+    """Run actual consecutive cycle transitions through the normalized-action environment.
 
-    # Create powertrain with specified SOH source
-    motor1_path, motor2_path = default_motor_map_paths(project_root)
-
-    # Configure powertrain parameters with SOH source
-    params = IntegratedPowertrainParameters(
-        soh_source=soh_source,
-        soh_trace_adapter=soh_adapter,
-    )
-
-    powertrain = IntegratedPowertrain(
-        motor1_map_path=motor1_path,
-        motor2_map_path=motor2_path,
-        parameters=params,
-    )
-
-    # Create policy
+    State trajectories include the initial point and every returned next state.
+    Action/reward entries at the initial point are NaN/zero respectively.
+    A trace's paired target describes the source battery, not the physical plant.
+    """
+    if episode_length < 1:
+        raise ValueError("episode_length must be positive")
+    params = IntegratedPowertrainParameters(soh_source=soh_source, soh_trace_adapter=soh_adapter)
+    env = EnergyManagementEnv(cycle, project_root=project_root, powertrain_parameters=params)
     policy = HealthAwareDeterministicPolicy()
+    state, _ = env.reset()
+    keys = ('velocity', 'battery_soh_ems', 'battery_soh_true', 'trace_true_soh',
+            'motor1_soh', 'motor2_soh', 'normalized_action', 'sigma_tor', 'soc', 'reward', 'time_s')
+    trajectory = {key: [] for key in keys}
 
-    # Initialize tracking
-    trajectory = {
-        'velocity': [],
-        'battery_soh_ems': [],
-        'battery_soh_true': [],
-        'motor1_soh': [],
-        'motor2_soh': [],
-        'sigma_tor': [],
-        'soc': [],
-        'reward': [],
-    }
+    def record(action=np.nan, sigma=np.nan, reward=0.):
+        physical = env.powertrain.health_model.get_health_state()
+        target = (soh_adapter.get_true_soh_at_time(env.simulation_time_s)
+                  if soh_adapter is not None and hasattr(soh_adapter, 'get_true_soh_at_time') else np.nan)
+        values = (float(state[0]), float(state[3]), physical['battery_soh'], target,
+                  physical['motor1_soh'], physical['motor2_soh'], action, sigma,
+                  float(env.powertrain.battery.state.soc), reward, env.simulation_time_s)
+        for key, value in zip(keys, values):
+            trajectory[key].append(value)
 
-    # Initial state
-    simulation_time_s = 0.0
-
-    print(f"Running {min(episode_length, len(cycle))} steps...")
-
-    for step in range(min(episode_length, len(cycle))):
-        timestep_data = cycle[step]
-        velocity_kmh = timestep_data[1]
-
-        # Get health state
-        health = powertrain.health_interface.get_health_state(simulation_time_s)
-        battery_soh_ems = health['battery_soh']
-        battery_soh_true = powertrain.health_interface.get_true_battery_soh()
-        motor1_soh = health['motor1_soh']
-        motor2_soh = health['motor2_soh']
-
-        # Get SOC
-        soc = float(powertrain.battery.state.soc)
-
-        # Build state for policy
-        # Policy expects: [velocity, wheel_torque, soc, battery_soh, motor1_soh, motor2_soh]
-        wheel_torque_demand = powertrain.vehicle.calculate_wheel_torque(
-            velocity_kmh=velocity_kmh,
-            target_velocity_kmh=velocity_kmh,  # Steady-state
-            slope_rad=0.0,
-            dt=1.0,
-        )
-
-        state = np.array([
-            velocity_kmh,
-            wheel_torque_demand,
-            soc,
-            battery_soh_ems,
-            motor1_soh,
-            motor2_soh,
-        ])
-
-        # Get action from policy
-        action = policy.select_action(state)
-        sigma_tor = action[0]
-
-        # Execute powertrain step
-        timestep_s = 1.0
-        result = powertrain.step(
-            velocity_kmh=velocity_kmh,
-            target_velocity_kmh=velocity_kmh,  # Steady-state
-            sigma_tor=sigma_tor,
-            slope_rad=0.0,
-            dt_s=timestep_s,
-        )
-
-        # Record trajectory
-        trajectory['velocity'].append(velocity_kmh)
-        trajectory['battery_soh_ems'].append(battery_soh_ems)
-        trajectory['battery_soh_true'].append(battery_soh_true)
-        trajectory['motor1_soh'].append(motor1_soh)
-        trajectory['motor2_soh'].append(motor2_soh)
-        trajectory['sigma_tor'].append(sigma_tor)
-        trajectory['soc'].append(soc)
-
-        # Simple reward (energy efficiency + constraint satisfaction)
-        reward = 0.0
-        if result.overall_feasible:
-            reward += 100.0
-            reward -= abs(result.battery_power_kw) * 1.0  # Penalize high power
-        trajectory['reward'].append(reward)
-
-        # Update simulation time
-        simulation_time_s += timestep_s
-
-    # Convert to numpy
-    for k in trajectory:
-        trajectory[k] = np.array(trajectory[k])
-
-    return trajectory
+    record()
+    info = {}
+    terminated = truncated = False
+    print(f"Running up to {min(episode_length, len(cycle) - 1)} transitions...")
+    try:
+        for _ in range(min(episode_length, len(cycle) - 1)):
+            action = policy.select_action(state)
+            time_before = env.simulation_time_s
+            state, reward, terminated, truncated, info = env.step(action)
+            sigma = info.get('sigma_tor') if env.simulation_time_s > time_before else None
+            record(float(action[0]), float(sigma) if sigma is not None else np.nan, reward)
+            if terminated or truncated:
+                break
+        result = {key: np.asarray(values) for key, values in trajectory.items()}
+        result['completed_cycle'] = (env.current_index == len(cycle) - 1
+                                     and not bool(info.get('constraint_violation', False)) and not truncated)
+        result['constraint_violation'] = bool(info.get('constraint_violation', False))
+        result['completed_transitions'] = env.current_index
+        return result
+    finally:
+        env.close()
 
 def print_results(traj, mode_name):
     """Print experiment results."""
     print(f"\n{mode_name} Results:")
-    print(f"  Steps completed:       {len(traj['soc'])}")
+    print(f"  Steps completed:       {traj['completed_transitions']}")
     print(f"  Initial battery SOH:   {traj['battery_soh_true'][0]:.9f}")
     print(f"  Final battery SOH:     {traj['battery_soh_true'][-1]:.9f}")
     print(f"  Battery degradation:   {traj['battery_soh_true'][0] - traj['battery_soh_true'][-1]:.9f}")
-    print(f"  Mean sigma_tor:        {np.mean(traj['sigma_tor']):.6f}")
+    print(f"  Mean sigma_tor:        {np.nanmean(traj['sigma_tor']):.6f}")
     print(f"  Total reward:          {np.sum(traj['reward']):.3f}")
     print(f"  Final motor1 SOH:      {traj['motor1_soh'][-1]:.9f}")
     print(f"  Final motor2 SOH:      {traj['motor2_soh'][-1]:.9f}")
@@ -183,7 +122,7 @@ def main():
     print("="*70)
 
     # Load BMS trace
-    trace_path = Path('data/bms_soh_trace.npz')
+    trace_path = project_root / 'data/bms_soh_trace.npz'
     soh_adapter = SOHTraceAdapter(trace_path)
     print(f"\nLoaded: {soh_adapter}")
 
@@ -208,13 +147,13 @@ def main():
     print_results(ai_traj, "BMS_ESTIMATED")
 
     # SOH estimation metrics
-    soh_error = ai_traj['battery_soh_ems'] - ai_traj['battery_soh_true']
+    soh_error = ai_traj['battery_soh_ems'] - ai_traj['trace_true_soh']
     soh_mae = np.mean(np.abs(soh_error))
     soh_rmse = np.sqrt(np.mean(soh_error**2))
 
-    print(f"\nSOH Estimation Error:")
+    print(f"\nMatched source-trace SOH error:")
     print(f"  Mean EMS-visible SOH (AI): {np.mean(ai_traj['battery_soh_ems']):.9f}")
-    print(f"  Mean true SOH:             {np.mean(ai_traj['battery_soh_true']):.9f}")
+    print(f"  Mean paired source SOH:             {np.mean(ai_traj['trace_true_soh']):.9f}")
     print(f"  MAE:                       {soh_mae:.9f}")
     print(f"  RMSE:                      {soh_rmse:.9f}")
     print(f"  Max absolute error:        {np.max(np.abs(soh_error)):.9f}")
@@ -224,13 +163,15 @@ def main():
     print("TRUE vs AI COMPARISON")
     print("="*70)
 
-    sigma_diff_rms = np.sqrt(np.mean((ai_traj['sigma_tor'] - true_traj['sigma_tor'])**2))
-    sigma_diff_max = np.max(np.abs(ai_traj['sigma_tor'] - true_traj['sigma_tor']))
+    common = min(len(ai_traj['sigma_tor']), len(true_traj['sigma_tor']))
+    sigma_difference = ai_traj['sigma_tor'][1:common] - true_traj['sigma_tor'][1:common]
+    sigma_diff_rms = np.sqrt(np.nanmean(sigma_difference**2))
+    sigma_diff_max = np.nanmax(np.abs(sigma_difference))
 
     print(f"\nEMS Decision Differences:")
-    print(f"  Mean sigma_tor (TRUE):  {np.mean(true_traj['sigma_tor']):.6f}")
-    print(f"  Mean sigma_tor (AI):    {np.mean(ai_traj['sigma_tor']):.6f}")
-    print(f"  Difference:             {np.mean(ai_traj['sigma_tor']) - np.mean(true_traj['sigma_tor']):+.6f}")
+    print(f"  Mean sigma_tor (TRUE):  {np.nanmean(true_traj['sigma_tor']):.6f}")
+    print(f"  Mean sigma_tor (AI):    {np.nanmean(ai_traj['sigma_tor']):.6f}")
+    print(f"  Difference:             {np.nanmean(ai_traj['sigma_tor']) - np.nanmean(true_traj['sigma_tor']):+.6f}")
     print(f"  RMS difference:         {sigma_diff_rms:.6f}")
     print(f"  Max difference:         {sigma_diff_max:.6f}")
 
@@ -268,11 +209,10 @@ def main():
     print("\n" + "="*70)
     print("PHASE 3B EXPERIMENT COMPLETE")
     print("="*70)
-    print("\n[SUCCESS] Motor efficiency map fix enabled full episode execution")
-    print("[SUCCESS] Both TRUE and AI experiments completed")
-    print(f"[SUCCESS] AI SOH estimation affects EMS decisions (Delta-sigma RMS = {sigma_diff_rms:.6f})")
-    print(f"[SUCCESS] Physical SOH evolution is independent in both modes")
-    print(f"[SUCCESS] AI SOH error: MAE = {soh_mae:.6f}, RMSE = {soh_rmse:.6f}")
+    print(f"\nCompleted cycles: TRUE={true_traj['completed_cycle']}, AI={ai_traj['completed_cycle']}")
+    print(f"Observed torque-split difference: RMS = {sigma_diff_rms:.6f}")
+    print("Physical degradation follows actual executed actions in each mode.")
+    print(f"Matched source-trace error: MAE = {soh_mae:.6f}, RMSE = {soh_rmse:.6f}")
 
 if __name__ == '__main__':
     main()

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+.vscode/
+.idea/
+data/raw/NASA/5.+Battery+Data+Set.zip
+
+# Keep bulk source measurements and the large generated window archive local.
+# Per-cell processed archives and small historical results remain versioned.
+/data/raw/
+/data/processed/sequences.npz

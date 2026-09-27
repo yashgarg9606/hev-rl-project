@@ -88,11 +88,25 @@ class NormalizedDDPGTests(unittest.TestCase):
         from src.agent.actor import Actor
         from src.agent.critic import Critic
         # These constructors are unchanged; no feasibility features were added.
-        actor = Actor(hidden_dim=50)
-        critic = Critic(hidden_dim=50)
+        actor = Actor(hidden_dim=64)
+        critic = Critic(hidden_dim=64)
         actor.load_state_dict(self.agent.actor.state_dict(), strict=True)
         critic.load_state_dict(self.agent.critic.state_dict(), strict=True)
         torch.testing.assert_close(actor(self.batch.history, self.batch.state), self.agent.actor(self.batch.history, self.batch.state))
+
+    def test_default_mlp_and_gru_widths_and_explicit_legacy_checkpoint(self):
+        from src.agent.actor import Actor
+        from src.agent.critic import Critic
+        self.assertEqual(self.agent.actor.fc1.out_features, 64)
+        self.assertEqual(self.agent.critic.fc1.out_features, 64)
+        self.assertEqual(self.agent.actor.fc1.in_features, 50 + 6)
+        self.assertEqual(self.agent.critic.fc1.in_features, 50 + 6 + 1)
+        legacy = DDPGAgent(hidden_dim=50, gru_hidden_dim=50)
+        legacy.actor.load_state_dict(Actor(hidden_dim=50).state_dict(), strict=True)
+        legacy.critic.load_state_dict(Critic(hidden_dim=50).state_dict(), strict=True)
+        configured = DDPGAgent(hidden_dim=32, gru_hidden_dim=24)
+        self.assertEqual(configured.actor.fc1.in_features, 24 + 6)
+        self.assertEqual(configured.actor.fc1.out_features, 32)
 
 
 def main():

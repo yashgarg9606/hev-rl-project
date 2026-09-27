@@ -1,3 +1,7 @@
+
+if __name__ == "__main__":
+    raise SystemExit("Historical fixed-output plot entrypoint retired. Use scripts/plot_run.py --help with a completed purged run and a fresh output directory. Existing historical figures remain unchanged.")
+
 from pathlib import Path
 import sys
 import numpy as np

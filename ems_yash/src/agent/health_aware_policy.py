@@ -1,56 +1,20 @@
 """
 Phase 3B — Health-Aware Deterministic Policy
 
-This policy provides a simple, physically-motivated torque allocation
-strategy that depends on battery State of Health (SOH).
+This policy provides a synthetic normalized-action response to battery SOH.
 
 IMPORTANT: This is NOT the trained DDPG-GRU-SA policy from the paper.
 It is a controlled experimental policy designed to isolate the effect
 of AI-estimated battery SOH on EMS decisions.
 
-Design Rationale:
------------------
-As battery SOH decreases, the policy shifts more load to Motor 1 to
-reduce battery stress. This is physically motivated by:
+The output is a = sigma_base + sensitivity * (1 - observed SOH), saturated
+to [0, 1]. The historical parameter name sigma_base is retained for callers,
+but a is a normalized action, not a physical torque fraction. The environment
+maps it into the current feasible [sigma_min, sigma_max] interval.
 
-1. Lower battery SOH → reduced current-handling capability
-2. Higher sigma_tor → more power from Motor 1, less from battery
-3. Protects degraded battery from high-current operation
-
-Physical Justification:
------------------------
-In a dual-motor HEV:
-- sigma_tor ∈ [0, 1] represents Motor 1 torque fraction
-- sigma_tor = 0.5: balanced 50/50 split
-- sigma_tor > 0.5: more load on Motor 1
-- sigma_tor < 0.5: more load on Motor 2
-
-The existing feasible action mapper ensures sigma_tor respects:
-- Motor torque limits
-- Motor speed limits
-- Physical feasibility
-
-Policy Formula:
----------------
-sigma_base = 0.50  (balanced baseline)
-soh_sensitivity = 0.30  (adjustment range)
-
-sigma_tor = sigma_base + soh_sensitivity * (1.0 - battery_soh)
-
-Examples:
----------
-battery_soh = 1.00 → sigma_tor = 0.50 + 0.30 * 0.00 = 0.50 (balanced)
-battery_soh = 0.99 → sigma_tor = 0.50 + 0.30 * 0.01 = 0.503
-battery_soh = 0.95 → sigma_tor = 0.50 + 0.30 * 0.05 = 0.515
-battery_soh = 0.90 → sigma_tor = 0.50 + 0.30 * 0.10 = 0.530
-battery_soh = 0.80 → sigma_tor = 0.50 + 0.30 * 0.20 = 0.560
-
-The policy is:
-- Deterministic (same input → same output)
-- Continuous (smooth SOH response)
-- Bounded (sigma_tor ∈ [0, 1])
-- Physically motivated (protects degraded battery)
-- SOH-dependent (required for Phase 3B experiment)
+Both motors draw from the same battery. A larger action does not by itself
+establish lower battery current, energy consumption, or degradation; those
+outcomes depend on the operating point and must be measured.
 """
 
 import numpy as np
@@ -63,10 +27,10 @@ class HealthAwareDeterministicPolicy:
     Parameters
     ----------
     sigma_base : float
-        Baseline torque split when battery SOH = 1.0 (default: 0.5)
+        Baseline normalized action when battery SOH = 1.0 (default: 0.5)
 
     soh_sensitivity : float
-        How much sigma_tor increases per unit decrease in SOH (default: 0.3)
+        Increase in normalized action per unit decrease in SOH (default: 0.3)
 
     Notes
     -----
@@ -89,14 +53,14 @@ class HealthAwareDeterministicPolicy:
                 f"sigma_base must be in [0, 1], got {sigma_base}"
             )
 
-        if soh_sensitivity < 0.0:
+        if not np.isfinite(soh_sensitivity) or soh_sensitivity < 0.0:
             raise ValueError(
                 f"soh_sensitivity must be non-negative, got {soh_sensitivity}"
             )
 
     def select_action(self, state: np.ndarray) -> np.ndarray:
         """
-        Select torque split action based on battery SOH.
+        Select a normalized action based on battery SOH.
 
         Parameters
         ----------
@@ -106,7 +70,7 @@ class HealthAwareDeterministicPolicy:
         Returns
         -------
         action : np.ndarray
-            Normalized action [0, 1] representing desired torque split
+            Normalized action [0, 1]; physical mapping belongs to the environment.
         """
         if state.shape != (6,):
             raise ValueError(
@@ -122,15 +86,13 @@ class HealthAwareDeterministicPolicy:
                 f"Battery SOH must be in [0, 1], got {battery_soh}"
             )
 
-        # Calculate sigma_tor
-        # As battery degrades (SOH → 0.8), increase sigma to protect battery
-        sigma_tor = self.sigma_base + self.soh_sensitivity * (1.0 - battery_soh)
+        normalized_action = self.sigma_base + self.soh_sensitivity * (1.0 - battery_soh)
 
         # Clip to valid action space [0, 1]
-        sigma_tor = np.clip(sigma_tor, 0.0, 1.0)
+        normalized_action = np.clip(normalized_action, 0.0, 1.0)
 
         # Return as 1D array to match action space
-        return np.array([sigma_tor], dtype=np.float32)
+        return np.array([normalized_action], dtype=np.float32)
 
     def __repr__(self) -> str:
         return (
@@ -152,7 +114,7 @@ def test_policy_behavior():
     print()
     print("Testing SOH sensitivity:")
     print()
-    print(f"{'Battery SOH':<15} {'sigma_tor':<10} {'Change from baseline':<25}")
+    print(f"{'Battery SOH':<15} {'action a':<10} {'Change from baseline':<25}")
     print("-" * 70)
 
     baseline_sigma = None
@@ -174,7 +136,7 @@ def test_policy_behavior():
         print(f"{soh:<15.2f} {sigma:<10.4f} {change_str:<25}")
 
     print()
-    print("[PASS] Policy increases sigma_tor as battery SOH decreases")
+    print("Policy output above is normalized a; the environment determines physical sigma_tor.")
     print("[PASS] All actions within [0, 1]")
     print("[PASS] Policy is deterministic (same state -> same action)")
     print()

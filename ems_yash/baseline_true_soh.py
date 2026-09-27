@@ -11,6 +11,7 @@ Records:
 This baseline will be compared against BMS_ESTIMATED mode in Phase 3B.
 """
 
+import argparse
 import sys
 import numpy as np
 import pandas as pd
@@ -28,14 +29,12 @@ def build_wltp_class3_excerpt():
     """
     Load a deterministic excerpt from WLTP Class 3 driving cycle.
 
-    For reproducibility, use first 100 seconds of WLTP cycle.
+    Use the first 100 samples (99 intervals) of the canonical WLTC Class3b file.
     """
-    wltp_file = project_root / "wltp" / "wltp_class3.csv"
+    wltp_file = project_root / "data" / "raw" / "WLTC_Class3b_raw.csv"
 
     if not wltp_file.exists():
-        print(f"Warning: WLTP file not found at {wltp_file}")
-        print("Using synthetic test cycle instead.")
-        return build_synthetic_cycle()
+        raise FileNotFoundError(f"Required canonical driving cycle is missing: {wltp_file}")
 
     # Load WLTP data
     data = pd.read_csv(wltp_file)
@@ -45,9 +44,9 @@ def build_wltp_class3_excerpt():
 
     # Format as [time, velocity, slope]
     cycle = np.column_stack([
-        cycle_data['time'].values,
-        cycle_data['velocity'].values,
-        np.zeros(len(cycle_data))  # flat terrain
+        cycle_data['time_s'].values,
+        cycle_data['velocity_kmh'].values,
+        cycle_data['slope_rad'].values,
     ])
 
     return cycle.astype(np.float64)
@@ -55,7 +54,7 @@ def build_wltp_class3_excerpt():
 
 def build_synthetic_cycle():
     """
-    Fallback synthetic driving cycle for reproducibility.
+    Explicit synthetic fixture retained for callers; no automatic substitution.
 
     30 timesteps with gentle velocity profile to avoid motor constraint violations.
     """
@@ -100,13 +99,8 @@ def run_baseline_experiment(seed=42, use_random_actions=True):
 
     # Load driving cycle
     print("Loading driving cycle...")
-    try:
-        cycle = build_wltp_class3_excerpt()
-        cycle_name = "WLTP Class 3 (first 100s)"
-    except Exception as e:
-        print(f"Failed to load WLTP: {e}")
-        cycle = build_synthetic_cycle()
-        cycle_name = "Synthetic (50 steps)"
+    cycle = build_wltp_class3_excerpt()
+    cycle_name = "WLTC Class 3b (first 100 samples)"
 
     print(f"Cycle: {cycle_name}")
     print(f"Duration: {len(cycle)} timesteps")
@@ -157,28 +151,30 @@ def run_baseline_experiment(seed=42, use_random_actions=True):
         # Get current state before step
         velocity_kmh = state[0]
         wheel_torque_nm = state[1]
-        soc = state[2]
+        soc = float(env.powertrain.battery.state.soc)
         battery_soh_state = state[3]
         motor1_soh_state = state[4]
         motor2_soh_state = state[5]
 
         # Get health from interface (before step)
-        health = env.powertrain.health_interface.get_health_state()
+        health = env.powertrain.health_interface.get_health_state(env.simulation_time_s)
         true_battery_soh = env.powertrain.health_interface.get_true_battery_soh()
         ems_battery_soh = health['battery_soh']
         motor1_soh = health['motor1_soh']
         motor2_soh = health['motor2_soh']
 
         # Step environment
+        time_before = env.simulation_time_s
         next_state, reward, terminated, truncated, info = env.step(action)
+        completed_dt = env.simulation_time_s - time_before
 
         # Get sigma_tor from info if available
-        sigma_tor = info.get('sigma_tor', float(action[0]))
+        sigma_tor = info.get('sigma_tor') if completed_dt > 0. else None
 
         # Get power/current/voltage from info dict
-        battery_power_kw = info.get('battery_power_kw', 0.0)
-        battery_current_a = info.get('battery_current_a', 0.0)
-        battery_voltage = info.get('battery_terminal_voltage_v', 0.0)
+        battery_power_kw = info.get('battery_power_kw', np.nan)
+        battery_current_a = info.get('battery_current_a', np.nan)
+        battery_voltage = info.get('battery_terminal_voltage_v', np.nan)
 
         # Record timestep data
         timestep_data.append({
@@ -186,7 +182,10 @@ def run_baseline_experiment(seed=42, use_random_actions=True):
             'velocity_kmh': velocity_kmh,
             'wheel_torque_nm': wheel_torque_nm,
             'action': float(action[0]),
+            'normalized_action': float(action[0]),
             'sigma_tor': sigma_tor,
+            'completed_dt_s': completed_dt,
+            'constraint_violation': bool(info.get('constraint_violation', False)),
             'soc': soc,
             'true_battery_soh': float(true_battery_soh),
             'ems_battery_soh': float(ems_battery_soh),
@@ -215,33 +214,42 @@ def run_baseline_experiment(seed=42, use_random_actions=True):
 
     # Convert to DataFrame
     df = pd.DataFrame(timestep_data)
+    completed = df[df['completed_dt_s'] > 0.]
+    total_duration = completed['completed_dt_s'].sum()
 
     # Calculate aggregate metrics
     metrics = {
         'num_steps': step_count,
         'initial_soc': df['soc'].iloc[0],
-        'final_soc': df['soc'].iloc[-1],
+        'final_soc': float(env.powertrain.battery.state.soc),
         'initial_battery_soh': df['true_battery_soh'].iloc[0],
-        'final_battery_soh': df['true_battery_soh'].iloc[-1],
+        'final_battery_soh': env.powertrain.health_model.battery_state.soh,
         'initial_motor1_soh': df['motor1_soh'].iloc[0],
-        'final_motor1_soh': df['motor1_soh'].iloc[-1],
+        'final_motor1_soh': env.powertrain.health_model.motor1_state.soh,
         'initial_motor2_soh': df['motor2_soh'].iloc[0],
-        'final_motor2_soh': df['motor2_soh'].iloc[-1],
-        'total_battery_energy_kwh': -df['battery_power_kw'].sum() * (1.0 / 3600.0),  # assume 1s timestep
-        'mean_battery_power_kw': df['battery_power_kw'].mean(),
-        'rms_battery_current_a': np.sqrt((df['battery_current_a'] ** 2).mean()),
+        'final_motor2_soh': env.powertrain.health_model.motor2_state.soh,
+        'total_battery_energy_kwh': -(df['battery_power_kw'] * df['completed_dt_s']).sum() / 3600.,
+        'mean_battery_power_kw': float((completed['battery_power_kw'] * completed['completed_dt_s']).sum() / total_duration) if total_duration else np.nan,
+        'rms_battery_current_a': float(np.sqrt((completed['battery_current_a'] ** 2 * completed['completed_dt_s']).sum() / total_duration)) if total_duration else np.nan,
         'mean_sigma_tor': df['sigma_tor'].mean(),
         'total_reward': df['reward'].sum(),
         'mean_reward': df['reward'].mean(),
         'cycle_name': cycle_name,
         'seed': seed,
         'action_source': 'random' if use_random_actions else 'fixed',
+        'constraint_violation': bool(info.get('constraint_violation', False)),
+        'completed_cycle': env.current_index == len(env.cycle) - 1 and not bool(info.get('constraint_violation', False)) and not truncated,
     }
 
     return df, metrics
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output-dir', type=Path, required=True, help='New result directory; must not exist')
+    args = parser.parse_args()
+    if args.output_dir.exists():
+        parser.error(f"Output already exists: {args.output_dir}")
     # Run experiment with fixed action for reproducibility and feasibility
     df, metrics = run_baseline_experiment(seed=42, use_random_actions=False)
 
@@ -290,8 +298,8 @@ def main():
     print()
 
     # Save data
-    output_dir = project_root / "results"
-    output_dir.mkdir(exist_ok=True)
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=False)
 
     csv_path = output_dir / "baseline_true_soh_timesteps.csv"
     df.to_csv(csv_path, index=False)

@@ -58,18 +58,22 @@ class DDPGAgent:
         state_dim: int = 6,
         action_dim: int = 1,
         history_length: int = 2,
-        hidden_dim: int = 50,
+        hidden_dim: int = 64,
         gamma: float = 0.99,
         actor_lr: float = 1e-4,
         critic_lr: float = 1e-5,
         noise_std: float = 0.35,
         tau: float = 0.005,
         device: torch.device | str = "cpu",
+        gru_hidden_dim: int = 50,
     ):
+        # hidden_dim controls the MLP independently of the history encoder.
+        # Explicit hidden_dim=50 loads the earlier 50-wide MLP checkpoints.
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.history_length = history_length
         self.hidden_dim = hidden_dim
+        self.gru_hidden_dim = gru_hidden_dim
 
         self.gamma = gamma
         self.noise_std = noise_std
@@ -84,12 +88,14 @@ class DDPGAgent:
         self.actor = Actor(
             state_dim=state_dim,
             action_dim=action_dim,
+            gru_hidden_dim=gru_hidden_dim,
             hidden_dim=hidden_dim,
         ).to(self.device)
 
         self.critic = Critic(
             state_dim=state_dim,
             action_dim=action_dim,
+            gru_hidden_dim=gru_hidden_dim,
             hidden_dim=hidden_dim,
         ).to(self.device)
 

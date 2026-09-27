@@ -218,7 +218,47 @@ class IntegratedPowertrain:
             ),
         )
 
+    def _snapshot_dynamic_state(self):
+        """Capture owned mutable state, excluding maps and external adapters."""
+        states = []
+        for owner, name in ((self.battery, "state"),
+                            (self.health_model, "battery_state"),
+                            (self.health_model, "motor1_state"),
+                            (self.health_model, "motor2_state")):
+            state = getattr(owner, name)
+            states.append((owner, name, state, vars(state).copy()))
+        return self.simulation_time_s, states
+
+    def _restore_dynamic_state(self, snapshot):
+        self.simulation_time_s, states = snapshot
+        for owner, name, state, values in states:
+            vars(state).clear()
+            vars(state).update(values)
+            setattr(owner, name, state)
+
     def step(
+        self,
+        velocity_kmh: float,
+        target_velocity_kmh: float,
+        sigma_tor: float,
+        slope_rad: float = 0.0,
+        dt_s: float = 1.0,
+        battery_temperature_c: float | None = None,
+    ) -> PowertrainStepResult:
+        """Advance one interval, restoring all owned state if it fails.
+
+        External trace-adapter I/O or diagnostic counters are not owned by
+        the plant. Trace lookup must remain independent of query order.
+        """
+        snapshot = self._snapshot_dynamic_state()
+        try:
+            return self._step(velocity_kmh, target_velocity_kmh, sigma_tor,
+                              slope_rad, dt_s, battery_temperature_c)
+        except Exception:
+            self._restore_dynamic_state(snapshot)
+            raise
+
+    def _step(
         self,
         velocity_kmh: float,
         target_velocity_kmh: float,

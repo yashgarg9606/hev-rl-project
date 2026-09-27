@@ -1,3 +1,7 @@
+
+if __name__ == "__main__":
+    raise SystemExit('Historical entrypoint retired: it uses legacy splits/all-data outputs and fixed artifact paths. Run scripts/run_purged_lobo.py --help for the isolated held-out evaluation; existing results remain historical. For trace inference use ../ems_yash/generate_bms_trace.py --help.')
+
 from pathlib import Path
 import sys
 

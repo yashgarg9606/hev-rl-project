@@ -1,8 +1,15 @@
 # BTP research progress and evidence
 
-Date: 27 September 2026. The five planned enhancements and their
-planner–executor–critic reviews are complete. All reported primary experiments
-have completed, and their saved outputs have been independently audited.
+Date: 27 September 2026. This report records the five initial enhancements and
+their completed, independently audited experiments. The later full-repository
+audit found additional edge-case software defects and issues in the separately
+uploaded BMS project. The measured tables below remain snapshots of the original
+declared experiments; they are not a claim that every repository path is correct.
+The [audit-remediation record](REMEDIATION.md) tracks the subsequent corrections
+and their independent checks.
+That corrective pass passed 89 unit tests and preserved all 280 protected
+pre-existing artifacts. Its exact replay of the 30 saved EMS episodes supports
+retaining the tables below under their original stated simulation scope.
 
 The strongest feature-only BMS model in this pilot is ridge: macro RMSE 0.067535,
 37.70% below the unchanged hybrid pilot. The EMS one-step grid reference reduces
@@ -114,8 +121,11 @@ Artifacts: [manifest](research_runs/bms_purged_lobo_seed42/manifest.json),
 [paired predictions](research_runs/bms_purged_lobo_seed42/predictions.csv),
 [summary](research_runs/bms_purged_lobo_seed42/summary.json), and
 [fold-specific models, scalers and histories](research_runs/bms_purged_lobo_seed42/folds/).
-The original raw NASA files are absent, so reproduction is supported from the
-supplied processed archives, not from independently reprocessed measurements.
+Raw NASA files for these four cells are now available in the separately uploaded
+project. This completed run still starts from the supplied processed archives.
+The raw-data audit matched capacities, SOH labels and source cycle IDs, and found
+feature agreement within the checked numerical tolerance. That agreement does
+not independently establish measurement quality or vehicle-pack applicability.
 
 ## EMS: controlled information and optimization comparisons
 
@@ -201,7 +211,11 @@ predictions and reloaded all 12 saved fold/model predictors. Each reproduced its
 saved predictions exactly in the recorded runtime. The EMS audit recomputed all
 summary metrics from 43,930 completed intervals, checked state continuity and
 original cycle coordinates, and found zero predicted/executed grid-power error.
-All recorded benchmark source, data, map and cycle hashes match the files.
+At the artifact audit, all recorded source, data, map and cycle hashes matched
+the files. Subsequent corrective source changes intentionally differ from these
+immutable historical manifests; the original datasets and result artifacts are
+preserved. A source-hash difference must not be represented as a newly rerun
+experiment or repaired by rewriting the old manifest.
 
 All **63 original research artifacts remain byte-for-byte unchanged**:
 [before/after SHA-256 verification](research_runs/preservation_check.json).
@@ -248,8 +262,8 @@ The main remaining limitations are grounded in the implementation:
 
 Next tasks, in order: clarify estimation versus next-cycle forecasting and whether
 previous measured capacity is available; then repeat the appropriate BMS protocol
-across predeclared seeds and simple architecture ablations; recover and verify raw
-data and expand independent cell evaluation; calibrate physical/aging models and
+across predeclared seeds and simple architecture ablations; validate the newly
+available raw data and expand independent cell evaluation; calibrate physical/aging models and
 quantify timestep sensitivity; define a justified learned-estimator/plant
 alignment; then train and compare EMS controllers with energy, constraint and
 health objectives stated in advance.

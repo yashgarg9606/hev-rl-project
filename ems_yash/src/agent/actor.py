@@ -21,7 +21,9 @@ Architecture:
         ↓
     Sigmoid
         ↓
-    sigma_tor ∈ [0, 1]
+    normalized action a ∈ [0, 1]
+
+Only the environment converts a into the feasible physical torque split.
 """
 
 import torch

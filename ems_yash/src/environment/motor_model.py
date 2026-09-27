@@ -139,7 +139,23 @@ class DualMotorModel:
             # differ by roundoff. Use their common numerical boundary.
             if not math.isclose(lower, upper, rel_tol=1e-12, abs_tol=1e-12):
                 return None
-            lower = upper = (lower + upper) / 2.0
+            # Choose a boundary that passes the same per-motor tolerance used
+            # during execution. Averaging can assign nonzero torque to a
+            # zero-capacity motor even when the other motor can absorb the
+            # entire roundoff-sized excess.
+            candidates = (upper, lower, (lower + upper) / 2.0)
+            feasible = [sigma for sigma in candidates if
+                        within_motor_limit(sigma * demand / motor1.gear_ratio, motor1.max_torque_nm)
+                        and within_motor_limit((1. - sigma) * demand / motor2.gear_ratio, motor2.max_torque_nm)]
+            if not feasible:
+                return None
+            lower = upper = feasible[0]
+        if not all(
+            within_motor_limit(sigma * demand / motor1.gear_ratio, motor1.max_torque_nm)
+            and within_motor_limit((1. - sigma) * demand / motor2.gear_ratio, motor2.max_torque_nm)
+            for sigma in (lower, upper)
+        ):
+            return None
         return lower, upper
 
     @staticmethod

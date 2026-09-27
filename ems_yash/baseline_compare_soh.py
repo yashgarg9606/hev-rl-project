@@ -17,13 +17,14 @@ The experiment validates:
 - Health-aware policy responds to SOH differences between modes
 """
 
+import argparse
 import sys
 from pathlib import Path
 import numpy as np
 
 # Add src to path
 project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root / "src"))
+sys.path.insert(0, str(project_root))
 
 from src.environment.rl_environment import EnergyManagementEnv
 from src.agent.health_aware_policy import HealthAwareDeterministicPolicy
@@ -120,11 +121,13 @@ def run_episode(env, policy, mode_name):
         'motor1_soh': [],
         'motor2_soh': [],
         'sigma_tor': [],
+        'normalized_action': [],
+        'expected_ems_soh': [],
     }
 
     # Initial state
     soh_history['timestep'].append(0)
-    soh_history['time_s'].append(0.0)
+    soh_history['time_s'].append(float(info['time_s']))
     soh_history['ems_battery_soh'].append(float(state[3]))
     soh_history['true_battery_soh'].append(
         env.powertrain.health_interface.get_true_battery_soh()
@@ -132,6 +135,8 @@ def run_episode(env, policy, mode_name):
     soh_history['motor1_soh'].append(float(state[4]))
     soh_history['motor2_soh'].append(float(state[5]))
     soh_history['sigma_tor'].append(np.nan)
+    soh_history['normalized_action'].append(np.nan)
+    soh_history['expected_ems_soh'].append(env.powertrain.health_interface.get_health_state(env.simulation_time_s)['battery_soh'])
 
     terminated = False
     truncated = False
@@ -141,6 +146,7 @@ def run_episode(env, policy, mode_name):
         action = policy.select_action(state)
 
         # Environment step
+        time_before = env.simulation_time_s
         next_state, reward, terminated, truncated, step_info = env.step(action)
 
         episode_reward += reward
@@ -155,7 +161,10 @@ def run_episode(env, policy, mode_name):
         )
         soh_history['motor1_soh'].append(float(next_state[4]))
         soh_history['motor2_soh'].append(float(next_state[5]))
-        soh_history['sigma_tor'].append(float(action[0]))
+        sigma = step_info.get('sigma_tor') if env.simulation_time_s > time_before else None
+        soh_history['sigma_tor'].append(float(sigma) if sigma is not None else np.nan)
+        soh_history['normalized_action'].append(float(action[0]))
+        soh_history['expected_ems_soh'].append(env.powertrain.health_interface.get_health_state(env.simulation_time_s)['battery_soh'])
 
         state = next_state
 
@@ -185,7 +194,7 @@ def run_episode(env, policy, mode_name):
     print(f"  Final EMS Battery SOH: {final_ems_soh:.6f}")
     print(f"  Final True Battery SOH: {final_true_soh:.6f}")
 
-    if terminated and 'constraint_violation' in step_info:
+    if bool(step_info.get('constraint_violation', False)):
         print(f"\n  [TERMINATED] Constraint violation: {step_info['violated_constraints']}")
 
     return {
@@ -196,7 +205,8 @@ def run_episode(env, policy, mode_name):
         'final_ems_soh': final_ems_soh,
         'final_true_soh': final_true_soh,
         'soh_history': soh_history,
-        'constraint_violation': terminated and 'constraint_violation' in step_info,
+        'constraint_violation': bool(step_info.get('constraint_violation', False)),
+        'completed_cycle': env.current_index == len(env.cycle) - 1 and not bool(step_info.get('constraint_violation', False)) and not truncated,
     }
 
 
@@ -227,30 +237,19 @@ def compare_results(true_results, ai_results):
     ai_physical_soh = ai_results['soh_history']['true_battery_soh']
 
     # In TRUE mode: EMS SOH should equal true physical SOH
-    true_mode_match = np.allclose(true_ems_soh, true_physical_soh, rtol=1e-9)
+    true_mode_match = np.allclose(true_ems_soh, true_physical_soh, rtol=0., atol=np.finfo(np.float32).eps)
     print(f"  TRUE mode: EMS SOH == Physical SOH? {true_mode_match}")
 
     if not true_mode_match:
         max_diff = np.max(np.abs(true_ems_soh - true_physical_soh))
         print(f"    [WARNING] Max difference: {max_diff:.9f}")
 
-    # In AI mode: EMS SOH should differ from true physical SOH
-    ai_mode_differ = not np.allclose(ai_ems_soh, ai_physical_soh, rtol=1e-6)
-    print(f"  AI mode: EMS SOH != Physical SOH? {ai_mode_differ}")
-
-    if ai_mode_differ:
-        mae = np.mean(np.abs(ai_ems_soh - ai_physical_soh))
-        max_error = np.max(np.abs(ai_ems_soh - ai_physical_soh))
-        print(f"    MAE: {mae:.6f}, Max Error: {max_error:.6f}")
-
-    # Check physical SOH evolution is identical
-    physical_soh_match = np.allclose(true_physical_soh, ai_physical_soh, rtol=1e-9)
-    print(f"  Physical SOH identical in both modes? {physical_soh_match}")
-
-    if not physical_soh_match:
-        max_diff = np.max(np.abs(true_physical_soh - ai_physical_soh))
-        print(f"    [CRITICAL] Physical SOH diverged: max diff = {max_diff:.9f}")
-        print(f"    This indicates data leakage or incorrect SOH routing!")
+    ai_mode_match = np.allclose(ai_ems_soh, ai_results['soh_history']['expected_ems_soh'],
+                                rtol=0., atol=np.finfo(np.float32).eps)
+    print(f"  AI observation matches configured SOH interface? {ai_mode_match}")
+    print(f"  Mean absolute trace/physical-model discrepancy: {np.mean(np.abs(ai_ems_soh - ai_physical_soh)):.6f}")
+    print("  This discrepancy is not matched-target BMS estimation error.")
+    print("  Different actions may legitimately produce different physical degradation.")
 
     print()
 
@@ -287,9 +286,14 @@ def compare_results(true_results, ai_results):
     true_sigma = true_results['soh_history']['sigma_tor'][1:]  # Skip NaN at index 0
     ai_sigma = ai_results['soh_history']['sigma_tor'][1:]
 
-    print(f"  TRUE mode: sigma_tor range [{true_sigma.min():.4f}, {true_sigma.max():.4f}]")
-    print(f"  AI mode: sigma_tor range [{ai_sigma.min():.4f}, {ai_sigma.max():.4f}]")
-    print(f"  Mean sigma_tor difference: {np.mean(ai_sigma - true_sigma):.6f}")
+    for mode, values in (("TRUE", true_sigma), ("AI", ai_sigma)):
+        values = values[np.isfinite(values)]
+        print(f"  {mode} executed sigma range: " + (f"[{values.min():.4f}, {values.max():.4f}]" if len(values) else "no feasible split"))
+    common_steps = min(len(ai_sigma), len(true_sigma))
+    differences = ai_sigma[:common_steps] - true_sigma[:common_steps]
+    differences = differences[np.isfinite(differences)]
+    print(f"  Mean sigma_tor difference over {len(differences)} mapped common attempts: "
+          + (f"{differences.mean():.6f}" if len(differences) else "unavailable"))
 
     print()
 
@@ -299,9 +303,8 @@ def compare_results(true_results, ai_results):
 
     checks = [
         ("TRUE mode: EMS uses physical SOH", true_mode_match),
-        ("AI mode: EMS uses estimated SOH", ai_mode_differ),
-        ("Physical SOH evolution identical", physical_soh_match),
-        ("Both episodes completed", not true_results['constraint_violation'] and not ai_results['constraint_violation']),
+        ("AI mode: observation matches SOH interface", ai_mode_match),
+        ("Both episodes completed", true_results['completed_cycle'] and ai_results['completed_cycle']),
     ]
 
     all_passed = all(check[1] for check in checks)
@@ -313,10 +316,8 @@ def compare_results(true_results, ai_results):
     print()
 
     if all_passed:
-        print("[SUCCESS] Phase 3B integration validated successfully!")
-        print("  - BMS_ESTIMATED mode provides AI-estimated SOH to EMS")
-        print("  - Physical battery SOH remains independent")
-        print("  - Health-aware policy responds to SOH differences")
+        print("[SUCCESS] SOH interface and episode-completion checks passed.")
+        print("  Physical degradation follows the actions executed in each mode.")
     else:
         print("[FAILURE] Validation checks failed. Review integration logic.")
 
@@ -325,6 +326,12 @@ def compare_results(true_results, ai_results):
 
 def main():
     """Run TRUE vs AI comparison experiment."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--trace', type=Path, default=project_root / 'data/bms_soh_trace.npz')
+    parser.add_argument('--output-dir', type=Path, required=True, help='New result directory; must not exist')
+    args = parser.parse_args()
+    if args.output_dir.exists():
+        parser.error(f"Output already exists: {args.output_dir}")
 
     print("=" * 70)
     print("PHASE 3B — TRUE vs AI SOH COMPARISON EXPERIMENT")
@@ -335,30 +342,29 @@ def main():
     print("  2. BMS_ESTIMATED: EMS receives AI-estimated battery SOH")
     print()
     print("Policy: Health-aware deterministic torque allocation")
-    print("  sigma_tor = 0.50 + 0.10 * (1.0 - battery_soh)")
-    print("  (Conservative sensitivity to maintain motor feasibility)")
+    print("  normalized a = 0.50 + 0.10 * (1.0 - battery_soh)")
+    print("  The environment maps a into the feasible physical split interval.")
     print()
 
     # Load driving cycle
     cycle = load_udds_cycle()
 
-    # Create health-aware policy with conservative parameters
-    # Use smaller sensitivity to keep motor operating points within feasible region
+    # Retain this diagnostic's declared response coefficient.
     policy = HealthAwareDeterministicPolicy(
         sigma_base=0.50,
-        soh_sensitivity=0.10,  # Reduced from 0.30 to avoid infeasible operating points
+        soh_sensitivity=0.10,
     )
 
     print(f"\nPolicy: {policy}")
     print()
 
     # Load BMS trace for AI mode
-    trace_file = project_root / "data" / "bms_soh_trace.npz"
+    trace_file = args.trace
 
     if not trace_file.exists():
         raise FileNotFoundError(
             f"BMS trace not found: {trace_file}\n"
-            f"Run generate_bms_trace.py first"
+            "Use generate_bms_trace.py --help to create a trace, then supply --trace."
         )
 
     trace_adapter = SOHTraceAdapter(trace_file)
@@ -421,8 +427,8 @@ def main():
     # Save results
     # -------------------------------------------------------------------------
 
-    output_dir = project_root / "results" / "phase3b"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=False)
 
     output_file = output_dir / "true_vs_ai_comparison.npz"
 
@@ -441,6 +447,7 @@ def main():
         true_soh_history_motor1_soh=true_results['soh_history']['motor1_soh'],
         true_soh_history_motor2_soh=true_results['soh_history']['motor2_soh'],
         true_soh_history_sigma_tor=true_results['soh_history']['sigma_tor'],
+        true_soh_history_normalized_action=true_results['soh_history']['normalized_action'],
 
         ai_mode=ai_results['mode'],
         ai_timesteps=ai_results['timesteps'],
@@ -455,6 +462,7 @@ def main():
         ai_soh_history_motor1_soh=ai_results['soh_history']['motor1_soh'],
         ai_soh_history_motor2_soh=ai_results['soh_history']['motor2_soh'],
         ai_soh_history_sigma_tor=ai_results['soh_history']['sigma_tor'],
+        ai_soh_history_normalized_action=ai_results['soh_history']['normalized_action'],
     )
 
     print(f"Results saved to: {output_file}")

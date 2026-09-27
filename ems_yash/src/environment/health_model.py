@@ -204,22 +204,24 @@ class HealthDegradationModel:
             self.motor1_parameters,
             self.motor2_parameters,
         ):
-            if motor_parameters.rated_power_kw <= 0:
+            if not np.isfinite(motor_parameters.rated_power_kw) or motor_parameters.rated_power_kw <= 0:
                 raise ValueError(
                     "Motor rated power must be positive."
                 )
 
             if not (
-                0 < motor_parameters.rated_efficiency <= 1
+                0 < motor_parameters.rated_efficiency < 1
             ):
                 raise ValueError(
-                    "Motor rated efficiency must be in (0, 1]."
+                    "Motor rated efficiency must be in (0, 1); the aging "
+                    "model requires a positive lifetime energy-loss budget."
                 )
 
-            if motor_parameters.life_hours <= 0:
+            if not np.isfinite(motor_parameters.life_hours) or motor_parameters.life_hours <= 0:
                 raise ValueError(
                     "Motor life must be positive."
                 )
+            self.motor_lifetime_energy_loss_kwh(motor_parameters)
 
     # ------------------------------------------------------------------
     # Battery aging
@@ -461,7 +463,12 @@ class HealthDegradationModel:
                 tlife
         """
 
-        return (
+        if (not np.isfinite(parameters.rated_power_kw) or parameters.rated_power_kw <= 0
+                or not 0 < parameters.rated_efficiency < 1
+                or not np.isfinite(parameters.life_hours) or parameters.life_hours <= 0):
+            raise ValueError("Motor lifetime energy-loss budget requires finite positive power/life and rated efficiency in (0, 1).")
+
+        budget = (
             (
                 1.0 / parameters.rated_efficiency
                 - 1.0
@@ -469,6 +476,9 @@ class HealthDegradationModel:
             * parameters.rated_power_kw
             * parameters.life_hours
         )
+        if not np.isfinite(budget) or budget <= 0:
+            raise ValueError("Motor lifetime energy-loss budget must be finite and positive.")
+        return budget
 
     @staticmethod
     def motor_step_energy_loss_kwh(
