@@ -29,7 +29,7 @@ from .history_encoder import HistoryEncoder
 
 
 class Critic(nn.Module):
-    """DDPG-GRU-SA Critic."""
+    """DDPG-GRU-SA Critic over normalized current and historical actions."""
 
     def __init__(
         self,
@@ -81,13 +81,13 @@ class Critic(nn.Module):
         Parameters
         ----------
         history:
-            [batch, L, state_dim + action_dim]
+            [batch, L, state_dim + action_dim], with normalized action columns.
 
         state:
             [batch, state_dim]
 
         action:
-            [batch, action_dim]
+            [batch, action_dim], normalized to [0, 1].
 
         Returns
         -------

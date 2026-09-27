@@ -1,0 +1,135 @@
+{
+  "status": "completed",
+  "started_utc": "2026-09-26T20:01:37.152022+00:00",
+  "protocol": "purged_chronological_inner_validation_outer_battery_holdout",
+  "config": {
+    "seed": 42,
+    "sequence_length": 20,
+    "validation_fraction": 0.2,
+    "batch_size": 64,
+    "max_epochs": 40,
+    "patience": 10,
+    "learning_rate": 0.001,
+    "gradient_clip": 5.0,
+    "cpu_threads": 2
+  },
+  "models": [
+    "mean",
+    "ridge",
+    "hybrid"
+  ],
+  "held_out_batteries": [
+    "B0005",
+    "B0006",
+    "B0007",
+    "B0018"
+  ],
+  "ridge_alphas": [
+    0.001,
+    0.01,
+    0.1,
+    1.0,
+    10.0
+  ],
+  "ridge_scaling": "centered flattened features divided by sqrt(D)",
+  "hybrid_architecture": {
+    "cnn_channels": 64,
+    "lstm_hidden": 64,
+    "lstm_layers": 1,
+    "dropout": 0.2
+  },
+  "scheduler": null,
+  "refit_after_selection": false,
+  "soh_units": "fraction",
+  "r2_constant_target": "null; excluded from macro R2 with count reported",
+  "device": "cpu",
+  "seed_reset": "model and DataLoader generator reset per fold",
+  "versions": {
+    "python": "3.11.7",
+    "numpy": "2.4.6",
+    "torch": "2.14.0"
+  },
+  "folds": {
+    "B0005": {
+      "status": "completed",
+      "counts": {
+        "train": 265,
+        "purged": 60,
+        "validation": 83,
+        "test": 148
+      }
+    },
+    "B0006": {
+      "status": "completed",
+      "counts": {
+        "train": 265,
+        "purged": 60,
+        "validation": 83,
+        "test": 148
+      }
+    },
+    "B0007": {
+      "status": "completed",
+      "counts": {
+        "train": 265,
+        "purged": 60,
+        "validation": 83,
+        "test": 148
+      }
+    },
+    "B0018": {
+      "status": "completed",
+      "counts": {
+        "train": 294,
+        "purged": 60,
+        "validation": 90,
+        "test": 112
+      }
+    }
+  },
+  "source_sha256": {
+    "scripts/ablation_study.py": "eaff328a4dbb52b78fa21fb3e351f11c70eef2eeebc582a26a880aacf5f5fef2",
+    "scripts/attention_plot.py": "7bc86a8676c86e553e5555436314b5a0cb786777fb4cc97b9a24527bd3c65c3c",
+    "scripts/baseline_lstm.py": "005ab393d320c56f5b8d3aac8fb9fb530b29f3fd4b5b680c7e3c1e296dca7665",
+    "scripts/battery_prediction_plots.py": "7fce379d84b93c88b72e100c37ebb1d068a28f105f0687154e74c330380d8540",
+    "scripts/build_dataset.py": "2330077eced2e34aaa2561ee234955b41a62a9b8bdec8181cc30a9b893eece47",
+    "scripts/build_sequences.py": "7e53a0806b4a0a976e4b43731bfa3cdbb976dfb42a90b8309e08a46cd9da665c",
+    "scripts/cross_validate.py": "6e8c7231d3064e3580993ca5cdd17d53caa1e1e47b626e6f48b4b7d6ce8ed1cb",
+    "scripts/cv_prediction_plots.py": "4e07b015f4ad7fdd43650662545e4418aa90dd1467af6cca4f970a0b632139dc",
+    "scripts/evaluate.py": "56985796609523f35d49b07a9c3298dce978d14e2c19e4d2983154f659f3ab93",
+    "scripts/final_summary.py": "6c575a2986c92fe67c2e4c7f1ea483ab19dd2692f5dbca565591c595af2c1e22",
+    "scripts/generate_plots.py": "6c6c539754f63767766b86f50cc7a8689d72cd98370f1dfebe365b44418c4c20",
+    "scripts/model_comparison.py": "9ed9139c05ab8a3468b3f2abb26679ea4c852526ab512a7a922e1f815167ec9f",
+    "scripts/run_experiment.py": "01ee0a7c5adfeb38ce5acfe7e12354690a7657fea1ee9ed116c478f9a7aa1334",
+    "scripts/run_purged_lobo.py": "bf86cb02e44ef58e55bfd517ee7730e4ea0aa6694362629ab7dae0218c225b3a",
+    "scripts/test_model.py": "2e1c0fb8067dc2fd3e40ecc332807402ff0ddfb13d2600ebc7c6ee87e8196646",
+    "scripts/test_split.py": "0bc22da782f19a4278a8f6b38cd3a96a1efc1e53c62a73d3cd8c08563d2dc7ce",
+    "scripts/train.py": "a105c2fab7889b2dabc300b75df2b235d2e4cb4a0570a6db111b93b50d51662e",
+    "src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/data/nasa_loader.py": "a8742c77e7ec6194ec4be58bd63dc446d315d24427609d08418e85fb6e56edaf",
+    "src/data/sequence_dataset.py": "2a78accd23d4248aae250e7630306a398ceed007329bce8be529847dd7d9eaf8",
+    "src/evaluation/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/evaluation/metrics.py": "f41d168d2695ff4e43bb3d43e63035504db37dc87647bb431598f6ad3a7fc075",
+    "src/evaluation/purged_lobo.py": "a40d43fcadfd08d79714bb945eb93fe9b9eb1786256a0c1a30235a44aa853d0e",
+    "src/evaluation/splits.py": "c353470c212eac9e7f9aa8f6185fd1606b4050fc2bc3f2112e46cfa8febc0e36",
+    "src/evaluation/test_purged_lobo.py": "ee96a49caad784193fec67385075571578a9872da8c98771a3a340a7845c55de",
+    "src/features/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/features/electrochemical.py": "5e2e6afbb866649c3de04f74c9452caa1dbd210b08efdb9609662eb52f98df93",
+    "src/models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/models/hybrid_model.py": "02c9085a2b075118f39dca644aa745111c66fd333cbcf0478219eb615acf5597",
+    "src/training/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/training/trainer.py": "073932fee5fca1dd202b29cc57ed0701927f4e9c9bdd9bb3f875b71bb1b9013a",
+    "src/visualization/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/visualization/plots.py": "e2af1955356206acef4d90add89f5e7759928b2bca64108d613aeefa2d7c8fdf"
+  },
+  "data_directory": "/Users/yashgarg/Desktop/non2/bms_gtr/data/processed",
+  "data_sha256": {
+    "B0005.npz": "931ed900c3fe576d5cd802a28c34cd3c81ad685e3a3328e5ea40b9c84b86282e",
+    "B0006.npz": "0b5729330c390b1776e81886b39647b72e381eedd0fcac9cd94c32a7ae4e9298",
+    "B0007.npz": "82e4faa52d82297c8203e879493788b6328915dcadcd880ac86da23150e46d28",
+    "B0018.npz": "e77fa9877f146ad1a5419cdfba25a510f54ff112dcd40ed4d2e4bffbdfa18205",
+    "sequences.npz": "c2976c98a40303737a3d9d97fa999cefd80c3470bc5a8a9bd9a71fcd9b29e48e"
+  },
+  "completed_utc": "2026-09-26T20:14:30.019185+00:00"
+}

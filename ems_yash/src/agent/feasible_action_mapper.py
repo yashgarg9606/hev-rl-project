@@ -7,10 +7,10 @@ Maps the Actor's normalized action:
 
 to the physically feasible motor torque split:
 
-    sigma_tor = sigma_min + a * (1 - sigma_min)
+    sigma_tor = sigma_min + a * (sigma_max - sigma_min)
 
-The mapper is deliberately kept separate from the environment and
-DDPG agent during the first integration stage.
+The environment applies this mapping at execution time. Replay and DDPG
+networks use normalized actions throughout.
 
 This preserves:
     - the Actor action space [0, 1]
@@ -28,13 +28,14 @@ import torch
 def map_action(
     actor_action: float | np.ndarray | torch.Tensor,
     sigma_min: float | np.ndarray | torch.Tensor,
+    sigma_max: float | np.ndarray | torch.Tensor = 1.0,
 ):
     """
     Map normalized Actor action to feasible physical sigma_tor.
 
     Formula:
 
-        sigma_tor = sigma_min + actor_action * (1 - sigma_min)
+        sigma_tor = sigma_min + actor_action * (sigma_max - sigma_min)
 
     Parameters
     ----------
@@ -44,29 +45,36 @@ def map_action(
     sigma_min:
         Minimum physically feasible sigma_tor.
 
+    sigma_max:
+        Maximum physically feasible sigma_tor. Defaults to 1 for legacy calls.
+
     Returns
     -------
     Same general numerical type as the input action.
     """
 
     if isinstance(actor_action, torch.Tensor):
-        return _map_torch(actor_action, sigma_min)
+        return _map_torch(actor_action, sigma_min, sigma_max)
 
-    return _map_numpy(actor_action, sigma_min)
+    return _map_numpy(actor_action, sigma_min, sigma_max)
 
 
 def _map_numpy(
     actor_action,
     sigma_min,
+    sigma_max,
 ):
     action = np.asarray(actor_action, dtype=np.float64)
     lower = np.asarray(sigma_min, dtype=np.float64)
+    upper = np.asarray(sigma_max, dtype=np.float64)
 
     if not np.all(np.isfinite(action)):
         raise ValueError("Actor action contains non-finite values.")
 
     if not np.all(np.isfinite(lower)):
         raise ValueError("sigma_min contains non-finite values.")
+    if not np.all(np.isfinite(upper)):
+        raise ValueError("sigma_max contains non-finite values.")
 
     if np.any(action < 0.0) or np.any(action > 1.0):
         raise ValueError(
@@ -78,16 +86,19 @@ def _map_numpy(
             "sigma_min must lie within [0, 1]."
         )
 
-    sigma = lower + action * (1.0 - lower)
+    if np.any(upper < lower) or np.any(upper > 1.0):
+        raise ValueError("sigma_max must lie within [sigma_min, 1].")
+
+    sigma = lower + action * (upper - lower)
 
     if np.any(sigma < lower - 1e-12):
         raise RuntimeError(
             "Mapped action fell below sigma_min."
         )
 
-    if np.any(sigma > 1.0 + 1e-12):
+    if np.any(sigma > upper + 1e-12):
         raise RuntimeError(
-            "Mapped action exceeded sigma=1."
+            "Mapped action exceeded sigma_max."
         )
 
     return sigma
@@ -96,6 +107,7 @@ def _map_numpy(
 def _map_torch(
     actor_action: torch.Tensor,
     sigma_min,
+    sigma_max,
 ):
     if not torch.isfinite(actor_action).all():
         raise ValueError(
@@ -114,10 +126,14 @@ def _map_torch(
             dtype=actor_action.dtype,
         )
 
+    upper = torch.as_tensor(sigma_max, device=actor_action.device, dtype=actor_action.dtype)
+
     if not torch.isfinite(lower).all():
         raise ValueError(
             "sigma_min contains non-finite values."
         )
+    if not torch.isfinite(upper).all():
+        raise ValueError("sigma_max contains non-finite values.")
 
     if torch.any(actor_action < 0.0) or torch.any(
         actor_action > 1.0
@@ -133,16 +149,19 @@ def _map_torch(
             "sigma_min must lie within [0, 1]."
         )
 
-    sigma = lower + actor_action * (1.0 - lower)
+    if torch.any(upper < lower) or torch.any(upper > 1.0):
+        raise ValueError("sigma_max must lie within [sigma_min, 1].")
+
+    sigma = lower + actor_action * (upper - lower)
 
     if torch.any(sigma < lower - 1e-6):
         raise RuntimeError(
             "Mapped action fell below sigma_min."
         )
 
-    if torch.any(sigma > 1.0 + 1e-6):
+    if torch.any(sigma > upper + 1e-6):
         raise RuntimeError(
-            "Mapped action exceeded sigma=1."
+            "Mapped action exceeded sigma_max."
         )
 
     return sigma

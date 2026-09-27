@@ -3,9 +3,9 @@ Phase 3B — SOH Trace Adapter
 
 Provides sample-and-hold access to BMS SOH predictions for EMS simulation.
 
-The BMS model generates SOH predictions at sparse intervals (every 20 cycles).
-The EMS operates at 1-second simulation timesteps. This adapter bridges the
-timescale gap by holding the most recent BMS prediction until the next update.
+The trace timestamps determine when each prediction becomes available. The
+adapter holds the most recent prediction until the next timestamp, independent
+of the order in which simulation times are queried.
 """
 
 import numpy as np
@@ -38,25 +38,48 @@ class SOHTraceAdapter:
                 f"BMS trace file not found: {self.trace_file}"
             )
 
-        # Load trace
-        data = np.load(self.trace_file)
+        with np.load(self.trace_file, allow_pickle=False) as data:
+            required_arrays = ('time_seconds', 'soh_predicted', 'soh_true')
+            missing = [name for name in required_arrays if name not in data]
+            if missing:
+                raise ValueError(f"Trace is missing required arrays: {', '.join(missing)}")
+            arrays = {name: data[name] for name in required_arrays}
 
-        self.time_seconds = data['time_seconds']
-        self.soh_predicted = data['soh_predicted']
-        self.soh_true = data['soh_true']
+        for name, values in arrays.items():
+            if values.ndim != 1:
+                raise ValueError(f"{name} must be a 1-D array")
+            if not np.issubdtype(values.dtype, np.number) or np.iscomplexobj(values):
+                raise ValueError(f"{name} must contain real numeric values")
+            if not np.all(np.isfinite(values)):
+                raise ValueError(f"{name} must contain only finite values")
 
-        # Validate trace
-        if len(self.time_seconds) != len(self.soh_predicted):
+        self.time_seconds = arrays['time_seconds']
+        self.soh_predicted = arrays['soh_predicted']
+        self.soh_true = arrays['soh_true']
+
+        if len({len(values) for values in arrays.values()}) != 1:
             raise ValueError(
-                f"Time and SOH arrays must have same length. "
-                f"Got {len(self.time_seconds)} times, {len(self.soh_predicted)} SOH values"
+                "Time, predicted SOH and true SOH arrays must have the same length"
             )
 
         if len(self.time_seconds) == 0:
             raise ValueError("Trace is empty")
 
-        # Track current position for efficient lookup
+        if not np.all(self.time_seconds[1:] > self.time_seconds[:-1]):
+            raise ValueError("Trace timestamps must be strictly increasing")
+
+        # Retained for callers that inspect/reset the last prediction index.
+        # Lookup never depends on this value, so adapters can be shared safely
+        # between episodes with different simulation times.
         self.current_index = 0
+
+    def _index_at_time(self, simulation_time_s: float) -> int:
+        """Return the right-held sample index, clamped to the trace endpoints."""
+        simulation_time_s = float(simulation_time_s)
+        if not np.isfinite(simulation_time_s):
+            raise ValueError("Simulation time must be finite")
+        index = int(np.searchsorted(self.time_seconds, simulation_time_s, side='right')) - 1
+        return min(max(index, 0), len(self.time_seconds) - 1)
 
     def get_soh_at_time(self, simulation_time_s: float) -> float:
         """
@@ -73,21 +96,9 @@ class SOHTraceAdapter:
             Most recent BMS SOH prediction
         """
 
-        # Handle edge cases
-        if simulation_time_s <= self.time_seconds[0]:
-            # Before first prediction: use initial SOH
-            return float(self.soh_predicted[0])
-
-        if simulation_time_s >= self.time_seconds[-1]:
-            # After final prediction: hold last value
-            return float(self.soh_predicted[-1])
-
-        # Advance to most recent prediction (sample-and-hold)
-        while (self.current_index < len(self.time_seconds) - 1 and
-               self.time_seconds[self.current_index + 1] <= simulation_time_s):
-            self.current_index += 1
-
-        return float(self.soh_predicted[self.current_index])
+        index = self._index_at_time(simulation_time_s)
+        self.current_index = index
+        return float(self.soh_predicted[index])
 
     def get_true_soh_at_time(self, simulation_time_s: float) -> float:
         """
@@ -97,18 +108,10 @@ class SOHTraceAdapter:
         with BMS timestamps, NOT for EMS consumption.
         """
 
-        if simulation_time_s <= self.time_seconds[0]:
-            return float(self.soh_true[0])
-
-        if simulation_time_s >= self.time_seconds[-1]:
-            return float(self.soh_true[-1])
-
-        # Find nearest timestamp
-        idx = np.searchsorted(self.time_seconds, simulation_time_s, side='right') - 1
-        return float(self.soh_true[idx])
+        return float(self.soh_true[self._index_at_time(simulation_time_s)])
 
     def reset(self):
-        """Reset adapter to beginning of trace."""
+        """Reset the diagnostic index; lookups already support arbitrary times."""
         self.current_index = 0
 
     def __repr__(self):
@@ -146,8 +149,8 @@ def test_soh_trace_adapter():
     print("-" * 70)
 
     # Get first few timestamps
-    times = adapter.time_seconds[:5]
-    print(f"First 5 trace timestamps (hours): {times/3600}")
+    times = adapter.time_seconds
+    print(f"First 5 trace timestamps (hours): {times[:5]/3600}")
     print()
 
     # Test times between updates
@@ -209,7 +212,7 @@ def test_soh_trace_adapter():
     print("TEST 4: Reset")
     print("-" * 70)
 
-    adapter.get_soh_at_time(times[5])  # Advance to middle
+    adapter.get_soh_at_time(times[len(times) // 2])  # Advance to middle
     assert adapter.current_index > 0, "Should have advanced"
 
     adapter.reset()

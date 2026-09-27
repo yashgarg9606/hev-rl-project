@@ -1,0 +1,14 @@
+{
+  "architecture": {
+    "cnn_channels": 64,
+    "lstm_hidden": 64,
+    "lstm_layers": 1,
+    "dropout": 0.2
+  },
+  "batch_size": 64,
+  "feature_shape": [
+    20,
+    3,
+    300
+  ]
+}

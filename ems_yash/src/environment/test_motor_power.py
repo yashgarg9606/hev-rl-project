@@ -3,9 +3,12 @@ Validation tests for the motor electrical-power model.
 """
 
 from pathlib import Path
+import sys
 
-from motor_efficiency_map import MotorEfficiencyMap
-from motor_power import MotorPowerModel
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from src.environment.motor_efficiency_map import MotorEfficiencyMap
+from src.environment.motor_power import MotorPowerModel
 
 
 def main():

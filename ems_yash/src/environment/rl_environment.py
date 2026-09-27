@@ -9,9 +9,10 @@ State:
      motor1_SOH, motor2_SOH]
 
 Action:
-    [sigma_tor]
+    [a], normalized to [0, 1]
 
-where sigma_tor is the fraction of wheel torque assigned to Motor 1.
+The environment maps a into the feasible [sigma_min, sigma_max] interval;
+the resulting sigma_tor is the fraction of wheel torque assigned to Motor 1.
 
 Target Wu et al. (2024) state:
     [v, Td, SOC, SOH, SOHM1, SOHM2]
@@ -43,7 +44,8 @@ from .integrated_powertrain import (
     default_motor_map_paths,
 )
 from .reward import WuReward
-from .constraints import PhysicalConstraintChecker
+from .constraints import ConstraintParameters, PhysicalConstraintChecker
+from .motor_model import DualMotorParameters
 from src.agent.feasible_action_mapper import map_action
 
 
@@ -62,7 +64,7 @@ class EnergyManagementEnv(gym.Env):
          motor2_SOH]
 
     Action:
-        [sigma_tor], bounded to [0, 1].
+        [a], normalized to [0, 1]. Replay and networks retain this action.
     """
 
     metadata = {"render_modes": []}
@@ -72,6 +74,7 @@ class EnergyManagementEnv(gym.Env):
         cycle: np.ndarray,
         project_root: str | Path | None = None,
         powertrain_parameters: IntegratedPowertrainParameters | None = None,
+        motor_parameters: DualMotorParameters | None = None,
     ):
         super().__init__()
 
@@ -101,6 +104,8 @@ class EnergyManagementEnv(gym.Env):
             raise ValueError(
                 "Driving cycle contains non-finite values."
             )
+        if np.any(cycle[:, 1] < 0):
+            raise ValueError("Driving-cycle velocities must be nonnegative.")
 
         time_s = cycle[:, 0]
 
@@ -129,15 +134,24 @@ class EnergyManagementEnv(gym.Env):
             powertrain_parameters
             or IntegratedPowertrainParameters()
         )
+        self.motor_parameters = motor_parameters
 
         self.powertrain = self._create_powertrain()
+        self.simulation_time_s = self.powertrain.simulation_time_s
 
         # --------------------------------------------------------------
         # Reward model
         # --------------------------------------------------------------
 
         self.reward_model = WuReward()
-        self.constraint_checker = PhysicalConstraintChecker()
+        motor1 = self.powertrain.motors.params.motor1
+        motor2 = self.powertrain.motors.params.motor2
+        self.constraint_checker = PhysicalConstraintChecker(ConstraintParameters(
+            motor1_max_speed_rpm=motor1.max_speed_rpm,
+            motor2_max_speed_rpm=motor2.max_speed_rpm,
+            motor1_max_torque_nm=motor1.max_torque_nm,
+            motor2_max_torque_nm=motor2.max_torque_nm,
+        ))
 
         # --------------------------------------------------------------
         # Environment dimensions
@@ -195,6 +209,7 @@ class EnergyManagementEnv(gym.Env):
         # --------------------------------------------------------------
 
         self.current_index = 0
+        self._terminated = False
 
         self.current_velocity_kmh = 0.0
 
@@ -234,6 +249,7 @@ class EnergyManagementEnv(gym.Env):
         return IntegratedPowertrain(
             motor1_map_path=self.motor1_map_path,
             motor2_map_path=self.motor2_map_path,
+            motor_parameters=self.motor_parameters,
             parameters=self.powertrain_parameters,
         )
 
@@ -332,7 +348,8 @@ class EnergyManagementEnv(gym.Env):
         self.powertrain = self._create_powertrain()
 
         self.current_index = 0
-        self.simulation_time_s = 0.0  # Phase 3B: track simulation time for BMS trace
+        self._terminated = False
+        self.simulation_time_s = self.powertrain.simulation_time_s
 
         # --------------------------------------------------------------
         # Initial driving-cycle point
@@ -432,37 +449,14 @@ class EnergyManagementEnv(gym.Env):
         wheel_torque_nm: float,
     ) -> float:
         """
-        Calculate the minimum feasible physical torque split.
-
-        The RL Actor outputs a normalized action a ∈ [0, 1].
-        This method determines the lower feasible physical boundary
-        sigma_min for the current transition.
-
-        The six-dimensional RL state is unchanged.
-
-        sigma_min is derived only from the current transition's physical
-        operating point and does not become an observation variable.
+        Compatibility accessor for the lower bound; execution uses both bounds.
         """
 
-        sigma_grid = np.linspace(
-            0.0,
-            1.0,
-            10001,
-            dtype=np.float64,
+        bounds = self.powertrain.motors.calculate_feasible_sigma_bounds(
+            velocity_kmh, wheel_torque_nm,
         )
-
-        for sigma in sigma_grid:
-
-            motor_operating_point = (
-                self.powertrain.motors.calculate_operating_point(
-                    velocity_kmh=velocity_kmh,
-                    wheel_torque_nm=wheel_torque_nm,
-                    sigma_tor=float(sigma),
-                )
-            )
-
-            if motor_operating_point["overall_feasible"]:
-                return float(sigma)
+        if bounds is not None:
+            return bounds[0]
 
         raise ValueError(
             "No feasible sigma_tor exists for the current transition: "
@@ -506,7 +500,7 @@ class EnergyManagementEnv(gym.Env):
         # Check episode boundary
         # --------------------------------------------------------------
 
-        if self.current_index >= len(self.cycle) - 1:
+        if self._terminated or self.current_index >= len(self.cycle) - 1:
             raise RuntimeError(
                 "Episode has already terminated. Call reset()."
             )
@@ -557,19 +551,45 @@ class EnergyManagementEnv(gym.Env):
         # --------------------------------------------------------------
         # Feasible action mapping
         #
-        # FIXED PRE-EXISTING BUG: Original code used sigma_tor before
-        # defining it. The action mapping was missing.
+        # Only execution maps normalized actions into physical motor splits.
         # --------------------------------------------------------------
 
-        sigma_min = self._calculate_sigma_min(
-            velocity_kmh=velocity_kmh,
+        # The larger endpoint checks both speeds for this forward-only step.
+        feasibility_velocity_kmh = max(velocity_kmh, target_velocity_kmh)
+        bounds = self.powertrain.motors.calculate_feasible_sigma_bounds(
+            velocity_kmh=feasibility_velocity_kmh,
             wheel_torque_nm=wheel_torque_nm,
         )
 
-        sigma_tor = map_action(
+        current_health = self.powertrain.health_interface.get_health_state(self.simulation_time_s)
+        if bounds is None:
+            self._terminated = True
+            info = {
+                "cycle_index": self.current_index,
+                "time_s": float(self.cycle[self.current_index, 0]),
+                "normalized_action": normalized_action,
+                "sigma_min": None,
+                "sigma_max": None,
+                "sigma_tor": None,
+                "velocity_kmh": velocity_kmh,
+                "target_velocity_kmh": target_velocity_kmh,
+                "wheel_torque_nm": wheel_torque_nm,
+                "constraint_violation": True,
+                "violated_constraints": ("motor_feasibility",),
+                "constraint_stage": "pre_step",
+                "infeasibility_reason": "No torque split satisfies the configured motor speed/torque limits.",
+                "soc": float(self.powertrain.battery.state.soc),
+                **current_health,
+            }
+            return self.current_state.copy(), 0.0, True, False, info
+
+        sigma_min, sigma_max = bounds
+
+        sigma_tor = float(map_action(
             actor_action=normalized_action,
             sigma_min=sigma_min,
-        )
+            sigma_max=sigma_max,
+        ))
 
         # --------------------------------------------------------------
         # Physical constraint check BEFORE powertrain simulation
@@ -583,14 +603,11 @@ class EnergyManagementEnv(gym.Env):
 
         motor_operating_point = (
             self.powertrain.motors.calculate_operating_point(
-                velocity_kmh=velocity_kmh,
+                velocity_kmh=feasibility_velocity_kmh,
                 wheel_torque_nm=wheel_torque_nm,
                 sigma_tor=sigma_tor,
             )
         )
-
-        # Get current health state for constraint checking
-        current_health = self.powertrain.health_interface.get_health_state(self.simulation_time_s)
 
         pre_step_constraint_result = (
             self.constraint_checker.check(
@@ -615,10 +632,8 @@ class EnergyManagementEnv(gym.Env):
 
         if not pre_step_constraint_result.overall_valid:
 
-            self.current_index = next_index
-            self.current_velocity_kmh = target_velocity_kmh
-
             terminated = True
+            self._terminated = True
             truncated = False
 
             info = {
@@ -628,6 +643,7 @@ class EnergyManagementEnv(gym.Env):
                 ),
                 "normalized_action": normalized_action,
                 "sigma_min": sigma_min,
+                "sigma_max": sigma_max,
                 "sigma_tor": sigma_tor,
 
                 "constraint_violation": True,
@@ -675,8 +691,8 @@ class EnergyManagementEnv(gym.Env):
             dt_s=dt_s,
         )
 
-        # Increment simulation time after powertrain step
-        self.simulation_time_s += dt_s
+        # The plant owns elapsed time; the environment mirrors completed steps.
+        self.simulation_time_s = self.powertrain.simulation_time_s
 
         # --------------------------------------------------------------
         # Physical constraint check AFTER powertrain simulation
@@ -788,6 +804,7 @@ class EnergyManagementEnv(gym.Env):
             self.current_index >= len(self.cycle) - 1
             or not post_step_constraint_result.overall_valid
         )
+        self._terminated = terminated
 
         truncated = False
 
@@ -846,6 +863,9 @@ class EnergyManagementEnv(gym.Env):
                 else None
             ),
             "sigma_tor": sigma_tor,
+            "normalized_action": normalized_action,
+            "sigma_min": sigma_min,
+            "sigma_max": sigma_max,
             "wheel_torque_nm": result.wheel_torque_nm,
 
             "battery_power_kw": result.battery_power_kw,

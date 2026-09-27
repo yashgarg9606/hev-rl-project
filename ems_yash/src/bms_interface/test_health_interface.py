@@ -5,7 +5,7 @@ Validates that the BMSHealthInterface correctly:
 1. Returns true physical SOH when source is TRUE_PHYSICAL
 2. Passes through motor SOH values unchanged
 3. Provides access to true battery SOH via get_true_battery_soh()
-4. Raises NotImplementedError for BMS_ESTIMATED in Phase 3A
+4. Requires a trace adapter for BMS_ESTIMATED
 5. Does not create a second physical battery SOH state
 """
 
@@ -154,10 +154,10 @@ def test_get_true_motor_soh():
     print("[PASS] get_true_motor_soh() returns physical model motor SOH")
 
 
-def test_bms_estimated_not_implemented():
-    """Test that BMS_ESTIMATED raises NotImplementedError in Phase 3A."""
+def test_bms_estimated_requires_adapter():
+    """Test that BMS_ESTIMATED rejects a missing trace adapter."""
 
-    print("\nTEST 5 — BMS_ESTIMATED Not Implemented")
+    print("\nTEST 5 — BMS_ESTIMATED Requires Adapter")
 
     health_model = HealthDegradationModel(
         battery_parameters=BatteryHealthParameters(),
@@ -171,18 +171,18 @@ def test_bms_estimated_not_implemented():
         ),
     )
 
-    interface = BMSHealthInterface(
-        health_model=health_model,
-        soh_source=SOHSource.BMS_ESTIMATED,
-    )
-
     try:
-        _ = interface.get_health_state()
-        assert False, "Should have raised NotImplementedError"
-    except NotImplementedError as e:
+        BMSHealthInterface(
+            health_model=health_model,
+            soh_source=SOHSource.BMS_ESTIMATED,
+        )
+    except ValueError as e:
+        assert "requires soh_trace_adapter" in str(e)
         print(f"Raised: {type(e).__name__}")
         print(f"Message: {str(e)}")
-        print("[PASS] BMS_ESTIMATED correctly raises NotImplementedError")
+        print("[PASS] BMS_ESTIMATED correctly rejects a missing adapter")
+    else:
+        raise AssertionError("Should have raised ValueError for a missing adapter")
 
 
 def test_no_duplicate_battery_state():
@@ -275,7 +275,7 @@ def main():
     test_true_physical_source()
     test_get_true_battery_soh()
     test_get_true_motor_soh()
-    test_bms_estimated_not_implemented()
+    test_bms_estimated_requires_adapter()
     test_no_duplicate_battery_state()
     test_soh_after_degradation()
 

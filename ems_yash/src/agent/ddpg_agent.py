@@ -16,20 +16,21 @@ The networks themselves are defined in:
 
 Historical sequences are supplied by:
     replay_buffer.py
+
+All network and replay actions (including history) are normalized to [0, 1].
+Only the environment maps them into the feasible physical torque interval.
 """
 
 from __future__ import annotations
 
 import copy
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 from .actor import Actor
 from .critic import Critic
-from .feasible_action_mapper import map_action
 from .replay_buffer import ReplayBatch
 
 
@@ -123,105 +124,6 @@ class DDPGAgent:
         self.mse_loss = nn.MSELoss()
 
     # ------------------------------------------------------------------
-    # Feasibility-aware action mapping
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _calculate_sigma_min(
-        velocity_kmh: torch.Tensor,
-        wheel_torque_nm: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Calculate the minimum feasible physical torque split.
-
-        Parameters
-        ----------
-        velocity_kmh:
-            [batch, 1] vehicle velocity.
-
-        wheel_torque_nm:
-            [batch, 1] wheel torque demand.
-
-        Returns
-        -------
-        sigma_min:
-            [batch, 1] minimum feasible physical sigma_tor.
-
-        Notes
-        -----
-        The exact feasibility boundary is determined by the dual-motor
-        physical constraints. This helper is intentionally kept separate
-        from the Actor so the six-dimensional RL state remains unchanged.
-
-        This method will be replaced by the validated vectorized
-        feasibility calculation once the production environment interface
-        is integrated.
-        """
-
-        velocity = velocity_kmh.detach().cpu().numpy()
-        wheel_torque = wheel_torque_nm.detach().cpu().numpy()
-
-        sigma_min_values = []
-
-        # Import locally to avoid changing the module-level dependency
-        # structure.
-        from pathlib import Path
-        from src.environment.integrated_powertrain import (
-            IntegratedPowertrain,
-            default_motor_map_paths,
-        )
-
-        project_root = Path(__file__).resolve().parents[2]
-
-        motor1_map, motor2_map = default_motor_map_paths(
-            project_root
-        )
-
-        powertrain = IntegratedPowertrain(
-            motor1_map_path=motor1_map,
-            motor2_map_path=motor2_map,
-        )
-
-        for v, torque in zip(
-            velocity.reshape(-1),
-            wheel_torque.reshape(-1),
-        ):
-            sigma_grid = np.linspace(
-                0.0,
-                1.0,
-                10001,
-                dtype=np.float64,
-            )
-
-            sigma_found = None
-
-            for sigma in sigma_grid:
-                result = powertrain.motors.calculate_operating_point(
-                    velocity_kmh=float(v),
-                    wheel_torque_nm=float(torque),
-                    sigma_tor=float(sigma),
-                )
-
-                if result["overall_feasible"]:
-                    sigma_found = float(sigma)
-                    break
-
-            if sigma_found is None:
-                raise ValueError(
-                    "No feasible sigma_tor exists for the sampled "
-                    f"transition: velocity={float(v):.6f} km/h, "
-                    f"wheel_torque={float(torque):.6f} Nm"
-                )
-
-            sigma_min_values.append(sigma_found)
-
-        return torch.tensor(
-            sigma_min_values,
-            dtype=velocity_kmh.dtype,
-            device=velocity_kmh.device,
-        ).reshape(-1, 1)
-
-    # ------------------------------------------------------------------
     # Action selection
     # ------------------------------------------------------------------
 
@@ -282,36 +184,21 @@ class DDPGAgent:
         self.critic_optimizer.zero_grad()
 
         with torch.no_grad():
-
-            next_normalized_action = self.target_actor(
-                batch.next_history,
-                batch.next_state,
-            )
-
-            next_velocity = batch.next_state[:, 0:1]
-            next_wheel_torque = batch.next_state[:, 1:2]
-
-            next_sigma_min = self._calculate_sigma_min(
-                velocity_kmh=next_velocity,
-                wheel_torque_nm=next_wheel_torque,
-            )
-
-            next_physical_action = map_action(
-                next_normalized_action,
-                next_sigma_min,
-            )
-
-            target_q = self.target_critic(
-                batch.next_history,
-                batch.next_state,
-                next_physical_action,
-            )
-
-            y = batch.reward + (
-                self.gamma
-                * (1.0 - batch.done)
-                * target_q
-            )
+            # A terminal transition has target exactly r. Do not evaluate a
+            # continuation network for its potentially infeasible next state.
+            y = batch.reward.clone()
+            nonterminal = batch.done.squeeze(-1) == 0.0
+            if nonterminal.any():
+                next_normalized_action = self.target_actor(
+                    batch.next_history[nonterminal],
+                    batch.next_state[nonterminal],
+                )
+                target_q = self.target_critic(
+                    batch.next_history[nonterminal],
+                    batch.next_state[nonterminal],
+                    next_normalized_action,
+                )
+                y[nonterminal] += self.gamma * target_q
 
         current_q = self.critic(
             batch.history,
@@ -362,24 +249,11 @@ class DDPGAgent:
             batch.state,
         )
 
-        current_velocity = batch.state[:, 0:1]
-        current_wheel_torque = batch.state[:, 1:2]
-
-        sigma_min = self._calculate_sigma_min(
-            velocity_kmh=current_velocity,
-            wheel_torque_nm=current_wheel_torque,
-        )
-
-        physical_action = map_action(
-            normalized_action,
-            sigma_min,
-        )
-
         actor_q = self.critic(
             batch.history,
             batch.state,
-            physical_action,
-)
+            normalized_action,
+        )
 
         actor_loss = -actor_q.mean()
 

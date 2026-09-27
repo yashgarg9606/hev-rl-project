@@ -32,6 +32,7 @@ It does not invent a penalty, clipping rule, or recovery action.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from .motor_model import within_motor_limit
 
 
 @dataclass(frozen=True)
@@ -150,13 +151,11 @@ class PhysicalConstraintChecker:
         # --------------------------------------------------------------
 
         motor1_speed_valid = (
-            abs(motor1_speed_rpm)
-            <= p.motor1_max_speed_rpm
+            within_motor_limit(motor1_speed_rpm, p.motor1_max_speed_rpm)
         )
 
         motor2_speed_valid = (
-            abs(motor2_speed_rpm)
-            <= p.motor2_max_speed_rpm
+            within_motor_limit(motor2_speed_rpm, p.motor2_max_speed_rpm)
         )
 
         # --------------------------------------------------------------
@@ -164,13 +163,11 @@ class PhysicalConstraintChecker:
         # --------------------------------------------------------------
 
         motor1_torque_valid = (
-            abs(motor1_torque_nm)
-            <= p.motor1_max_torque_nm
+            within_motor_limit(motor1_torque_nm, p.motor1_max_torque_nm)
         )
 
         motor2_torque_valid = (
-            abs(motor2_torque_nm)
-            <= p.motor2_max_torque_nm
+            within_motor_limit(motor2_torque_nm, p.motor2_max_torque_nm)
         )
 
         # --------------------------------------------------------------

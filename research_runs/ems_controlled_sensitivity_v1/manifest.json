@@ -1,0 +1,523 @@
+{
+  "status": "completed",
+  "started_utc": "2026-09-26T20:14:38.326204+00:00",
+  "scope": "synthetic observation sensitivity and an instantaneous grid reference; no trained policy or learned BMS",
+  "controllers": [
+    {
+      "name": "fixed_0p5",
+      "kind": "fixed",
+      "soh_bias": 0.0
+    },
+    {
+      "name": "health_rule_true",
+      "kind": "health_rule",
+      "soh_bias": 0.0
+    },
+    {
+      "name": "health_rule_bias_minus_0p02",
+      "kind": "health_rule",
+      "soh_bias": -0.02
+    },
+    {
+      "name": "health_rule_bias_minus_0p05",
+      "kind": "health_rule",
+      "soh_bias": -0.05
+    },
+    {
+      "name": "instantaneous_grid_101",
+      "kind": "grid",
+      "soh_bias": 0.0
+    }
+  ],
+  "cycles": [
+    "NEDC",
+    "UDDS",
+    "HWFET",
+    "WLTC_Class3b",
+    "CLTC_P",
+    "FTP75"
+  ],
+  "config": {
+    "soh_source": "true_physical",
+    "initial_soc": 0.6,
+    "seed": 42,
+    "rule_base": 0.5,
+    "rule_sensitivity": 0.3,
+    "observation_dtype": "float32",
+    "bias_application": "additive copied observation only; out-of-range SOH rejected",
+    "grid_actions": [
+      0.0,
+      0.009999999776482582,
+      0.019999999552965164,
+      0.029999999329447746,
+      0.03999999910593033,
+      0.05000000074505806,
+      0.05999999865889549,
+      0.07000000029802322,
+      0.07999999821186066,
+      0.09000000357627869,
+      0.10000000149011612,
+      0.10999999940395355,
+      0.11999999731779099,
+      0.12999999523162842,
+      0.14000000059604645,
+      0.15000000596046448,
+      0.1599999964237213,
+      0.17000000178813934,
+      0.18000000715255737,
+      0.1899999976158142,
+      0.20000000298023224,
+      0.20999999344348907,
+      0.2199999988079071,
+      0.23000000417232513,
+      0.23999999463558197,
+      0.25,
+      0.25999999046325684,
+      0.27000001072883606,
+      0.2800000011920929,
+      0.28999999165534973,
+      0.30000001192092896,
+      0.3100000023841858,
+      0.3199999928474426,
+      0.33000001311302185,
+      0.3400000035762787,
+      0.3499999940395355,
+      0.36000001430511475,
+      0.3700000047683716,
+      0.3799999952316284,
+      0.38999998569488525,
+      0.4000000059604645,
+      0.4099999964237213,
+      0.41999998688697815,
+      0.4300000071525574,
+      0.4399999976158142,
+      0.44999998807907104,
+      0.46000000834465027,
+      0.4699999988079071,
+      0.47999998927116394,
+      0.49000000953674316,
+      0.5,
+      0.5099999904632568,
+      0.5199999809265137,
+      0.5299999713897705,
+      0.5400000214576721,
+      0.550000011920929,
+      0.5600000023841858,
+      0.5699999928474426,
+      0.5799999833106995,
+      0.5899999737739563,
+      0.6000000238418579,
+      0.6100000143051147,
+      0.6200000047683716,
+      0.6299999952316284,
+      0.6399999856948853,
+      0.6499999761581421,
+      0.6600000262260437,
+      0.6700000166893005,
+      0.6800000071525574,
+      0.6899999976158142,
+      0.699999988079071,
+      0.7099999785423279,
+      0.7200000286102295,
+      0.7300000190734863,
+      0.7400000095367432,
+      0.75,
+      0.7599999904632568,
+      0.7699999809265137,
+      0.7799999713897705,
+      0.7900000214576721,
+      0.800000011920929,
+      0.8100000023841858,
+      0.8199999928474426,
+      0.8299999833106995,
+      0.8399999737739563,
+      0.8500000238418579,
+      0.8600000143051147,
+      0.8700000047683716,
+      0.8799999952316284,
+      0.8899999856948853,
+      0.8999999761581421,
+      0.9100000262260437,
+      0.9200000166893005,
+      0.9300000071525574,
+      0.9399999976158142,
+      0.949999988079071,
+      0.9599999785423279,
+      0.9700000286102295,
+      0.9800000190734863,
+      0.9900000095367432,
+      1.0
+    ],
+    "grid_objective": "minimum signed instantaneous motor electrical kW",
+    "grid_tie_break": "first argmin",
+    "grid_execution_power_atol_kw": 1e-10,
+    "grid_execution_power_rtol": 1e-12,
+    "energy_units": "kWh",
+    "soh_loss_units": "fraction",
+    "incomplete_runs_comparable": false
+  },
+  "versions": {
+    "python": "3.11.7",
+    "numpy": "2.4.6",
+    "gymnasium": "1.3.0",
+    "pandas": "3.0.5",
+    "scipy": "1.17.1",
+    "torch": "2.14.0"
+  },
+  "episodes": {
+    "NEDC__fixed_0p5": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "NEDC__health_rule_true": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "NEDC__health_rule_bias_minus_0p02": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "NEDC__health_rule_bias_minus_0p05": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "NEDC__instantaneous_grid_101": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "UDDS__fixed_0p5": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "UDDS__health_rule_true": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "UDDS__health_rule_bias_minus_0p02": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "UDDS__health_rule_bias_minus_0p05": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "UDDS__instantaneous_grid_101": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "HWFET__fixed_0p5": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "HWFET__health_rule_true": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "HWFET__health_rule_bias_minus_0p02": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "HWFET__health_rule_bias_minus_0p05": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "HWFET__instantaneous_grid_101": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "WLTC_Class3b__fixed_0p5": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "WLTC_Class3b__health_rule_true": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "WLTC_Class3b__health_rule_bias_minus_0p02": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "WLTC_Class3b__health_rule_bias_minus_0p05": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "WLTC_Class3b__instantaneous_grid_101": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "CLTC_P__fixed_0p5": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "CLTC_P__health_rule_true": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "CLTC_P__health_rule_bias_minus_0p02": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "CLTC_P__health_rule_bias_minus_0p05": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "CLTC_P__instantaneous_grid_101": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "FTP75__fixed_0p5": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "FTP75__health_rule_true": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "FTP75__health_rule_bias_minus_0p02": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "FTP75__health_rule_bias_minus_0p05": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    },
+    "FTP75__instantaneous_grid_101": {
+      "status": "completed",
+      "completion_reason": "cycle_complete"
+    }
+  },
+  "physical_configuration": {
+    "powertrain": {
+      "wheel_radius_m": 0.325,
+      "battery_capacity_ah": 72.0,
+      "battery_ocv_v": 255.5,
+      "battery_ohmic_resistance_ohm": 0.0031,
+      "initial_soc": 0.6,
+      "initial_polarization_voltage_1_v": 0.0,
+      "initial_polarization_voltage_2_v": 0.0,
+      "battery_temperature_c": 25.0,
+      "soh_source": "true_physical",
+      "soh_trace_adapter": null
+    },
+    "vehicle": {
+      "mass_kg": 1635.0,
+      "rotational_mass_factor": 1.04,
+      "frontal_area_m2": 2.16,
+      "drag_coefficient": 0.25,
+      "rolling_resistance": 0.016,
+      "wheel_radius_m": 0.325,
+      "gravity_mps2": 9.81,
+      "air_density_kgpm3": 1.225
+    },
+    "motors": {
+      "motor1": {
+        "max_torque_nm": 180.0,
+        "max_speed_rpm": 12000.0,
+        "rated_power_kw": 28.0,
+        "rated_efficiency": 0.98,
+        "gear_ratio": 11.0
+      },
+      "motor2": {
+        "max_torque_nm": 155.0,
+        "max_speed_rpm": 12000.0,
+        "rated_power_kw": 24.0,
+        "rated_efficiency": 0.98,
+        "gear_ratio": 6.0
+      }
+    },
+    "battery_electrical": {
+      "nominal_capacity_ah": 72.0,
+      "nominal_ocv_v": 255.5,
+      "ohmic_resistance_ohm": 0.0031,
+      "min_parameter_temperature_c": 15.0,
+      "max_parameter_temperature_c": 45.0
+    },
+    "battery_initial_state": {
+      "soc": 0.6,
+      "polarization_voltage_1_v": 0.0,
+      "polarization_voltage_2_v": 0.0
+    },
+    "initial_rc_parameters": {
+      "charge": {
+        "direction": "charge",
+        "r1_ohm": 0.01428499863352088,
+        "r2_ohm": 0.014430126558969383,
+        "c1_f": 2415.0347,
+        "c2_f": 71121.90250000001
+      },
+      "discharge": {
+        "direction": "discharge",
+        "r1_ohm": 0.014801729515104103,
+        "r2_ohm": 0.013208031637615664,
+        "c1_f": 2510.0186999999996,
+        "c2_f": 67904.98499999999
+      }
+    },
+    "battery_health": {
+      "nominal_capacity_ah": 72.0,
+      "gas_constant_j_mol_k": 8.31,
+      "power_law_exponent": 0.55,
+      "c_rate_table": [
+        0.5,
+        2.0,
+        10.0
+      ],
+      "b_table": [
+        31630.0,
+        21681.0,
+        12934.0
+      ],
+      "activation_energy_intercept_j_mol": 31700.0,
+      "activation_energy_c_coefficient": 370.3,
+      "eol_capacity_loss_percent": 20.0
+    },
+    "motor1_health": {
+      "rated_power_kw": 28.0,
+      "rated_efficiency": 0.98,
+      "life_hours": 30000.0
+    },
+    "motor2_health": {
+      "rated_power_kw": 24.0,
+      "rated_efficiency": 0.98,
+      "life_hours": 30000.0
+    },
+    "initial_health": {
+      "battery_soh": 1.0,
+      "motor1_soh": 1.0,
+      "motor2_soh": 1.0
+    },
+    "constraints": {
+      "soc_min": 0.2,
+      "soc_max": 0.9,
+      "battery_soh_min": 0.8,
+      "battery_soh_max": 1.0,
+      "motor1_soh_min": 0.8,
+      "motor1_soh_max": 1.0,
+      "motor2_soh_min": 0.8,
+      "motor2_soh_max": 1.0,
+      "motor1_max_speed_rpm": 12000.0,
+      "motor2_max_speed_rpm": 12000.0,
+      "motor1_max_torque_nm": 180.0,
+      "motor2_max_torque_nm": 155.0
+    },
+    "reward": {
+      "k1": 1.0,
+      "k2": 100.0,
+      "k3": 1000.0,
+      "k4": 1000.0,
+      "k5": 0.001
+    }
+  },
+  "source_sha256": {
+    "run_controlled_benchmark.py": "ae99dcca3bcf79fac1dbd7b1658d27f5e4254ac7fcaf4937cf160d79b5a8f814",
+    "src/agent/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/agent/actor.py": "0a2a5464e4356c983a00ec4deadb2a1116a869de5073bc123fa1badb28d50842",
+    "src/agent/critic.py": "76e83f16c72a22f7b54b9208e1e38f47ef4bb40c252ef6ec166a300ad0ca2ef5",
+    "src/agent/ddpg_agent.py": "15b8e65daa05d45b1d7756162a62c5634ddd18b8ffeeb85274e1e7057733ec6a",
+    "src/agent/feasible_action_mapper.py": "b47741ac05aeaf5bdd3dc4691e42ba4b07cc59dfa3e3c718d82e8e405efdf632",
+    "src/agent/health_aware_policy.py": "bef06cddf4bbe9a1c2587afac3b4e6a30573e2b43fb503185cb88d19eca83e62",
+    "src/agent/history_encoder.py": "aa79faab3245ed5c62208125da041c23ec76d45bdd0dc29402d9e0fa239b89a5",
+    "src/agent/recurrent_encoder.py": "b3ad826c1655f8a3b301f11532b9710551be246ca615a48c304dd7ffbe833550",
+    "src/agent/replay_buffer.py": "7598710deb2c117ccb8c9e018225293a394bb57a583087635466699eec1c9457",
+    "src/agent/self_attention.py": "bd3181015b1f9ef94828093a50b2cb7a80b655aba69c68f0a76d711db1e6c5be",
+    "src/agent/test_action_feasibility.py": "45afb358a1334ce6ca0428d73b60f16f6af12e301d9065309851b06fd64e8e7e",
+    "src/agent/test_action_feasibility_strategy.py": "faee4787e7b346cbeb0d1ba75cd8371e18a609c34e37d7b5a37e9bdd4747af9d",
+    "src/agent/test_action_mapping_interface.py": "a2bc9323c1d971759cf0d94f1439c09da363e97578f834087e7b76af19026c39",
+    "src/agent/test_ddpg_agent.py": "a79dd8f06693c9e58465b6f929630eec2e18f67ab8498cd79715c86a4b371491",
+    "src/agent/test_ddpg_feasible_action_path.py": "24f713acdaf85bfc41954926ab39d9ee0a74ac10c21508f2d0444c14d76faca4",
+    "src/agent/test_end_to_end.py": "bb31d0f8f95edab257b28d7540406f222ce8a155be1e1ab258a0b822b7aa2975",
+    "src/agent/test_feasible_action_mapper.py": "7e6d5392ebe36552ed547d6ad461d10d258b41ce9b636f1c64784e25e1ac0dcd",
+    "src/agent/test_feasible_action_mapping.py": "db7a3447f5389a8b4be4933a9021cd2a02ebf9111fd5f9a9a288d95f1f1ed941",
+    "src/agent/test_full_episode.py": "092d80e5235e71b459c152f21b5871b76fc95987680d378b3cdee497a7f15e18",
+    "src/agent/test_geared_torque.py": "f394289d083f32af414cad1435399ee257cd616ad2dcd9a7840b95e4e8071c9d",
+    "src/agent/test_networks.py": "9b22bcc46b1fdf1c128ff7f37c4544d5d6a1ed5aee3d8fe292c4e35e07b5b04f",
+    "src/agent/test_replay_buffer.py": "94bc4da05dba54187b597fe8506131ad2bd56ec7cce2f719372da156e245213f",
+    "src/agent/test_replay_compatibility.py": "74a8bf9bdcaa21e3c0f971eed9f6da70306150fc3cc6e106ffeadbc1b29b84e9",
+    "src/agent/test_replay_target_action_audit.py": "e4c16a366997af5d312425a12e63a3336a797349ad6e3bfa71d2f239d3639286",
+    "src/agent/test_training_loop.py": "b0bc6075ace14629879c558a7015ebef91b6de374aaf283c96407da9ddf317ce",
+    "src/agent/test_training_stability.py": "7c0fdec6ab46b9b8375935e7a83b2d9f5013478ce50b2f8ced89f90f2c996a22",
+    "src/bms_interface/__init__.py": "842e62b47c1bb6cd044f56b11a85da113357c9cb8f77e6af087f195f78507ba5",
+    "src/bms_interface/health_interface.py": "1df7b0331030e7465fc71c64cb686acda61baef57051b67e0af8a233197538ca",
+    "src/bms_interface/soh_source.py": "88b30a8a0b1a0405b69b45ebad0fb4fa5c3c362e90de142051ac74ab413b3715",
+    "src/bms_interface/soh_trace_adapter.py": "f7ad42621f35d55ab130bb32b42363f63fd6a4216e6508f513b7c4455cc9d6b4",
+    "src/bms_interface/test_health_interface.py": "89b89c8ebd3f5504b7bc96e47a769d883c5d34fd432ce1a73e4bd035c84fc2b7",
+    "src/bms_interface/test_soh_trace_adapter.py": "6b7ecce7b9f7c7c3aecfd87663a9886fca65343f526694bdcc18312bddbe47b8",
+    "src/data/create_mixed_test.py": "9bfd4091fc880fc4d025e8e97ed4390d773c3910de2adb345c82c3295ada6185",
+    "src/data/create_mixed_training.py": "2ca85bd47655cce3b2f999af0384404feb059823dd78e3e121c454af807c6bdc",
+    "src/data/extract_cltc_p.py": "e704ea186c64587d46e1a77305709c46d294fcd271e54c2f5fb0dd3a45224903",
+    "src/data/extract_ftp75.py": "8b93ae78a8f7056b81b2a37193e18b3bb2a9935fba189101efb47d21a6a030a0",
+    "src/data/extract_hwfet.py": "c39110f39ee25577e69d48bc058bb4276f1076edb2c0b3aa2d7abc7cdb6f8ee1",
+    "src/data/extract_nedc.py": "6933ca36146444d5217381e9ca9ab980a02ed2e60bf5043bf87134995c9e91f5",
+    "src/data/extract_udds.py": "a0a117389c7462b8c29797f6973c9bcfc5ca8de6f4930d8983524b063c41b618",
+    "src/data/extract_wltc.py": "a76495aeef76be489085b7039c2ae534320107dd44c85814a0f13b9012fd920a",
+    "src/data/plot_actual_cycle.py": "e2ae7ad61962085fefa98c54f34d0fd4a831c045cdb4de77351ba1abf20fe49d",
+    "src/data/plot_cltc_p.py": "f4afdfd1d2d49d0c53f92e587bf9358ae5819fe7970c21e23b6a016f4a7743af",
+    "src/data/plot_hwfet.py": "0fcb55645fe5b1aa78b203c8c97bd5b0a9e815ed0433801d6d392568b2857a90",
+    "src/data/plot_mixed_test.py": "d8ed4aba912310f622c288a136c823965db3e1fb61eb133930fc6d41a53395d3",
+    "src/data/plot_mixed_training.py": "9b35e30477417dcbac90d3fdfeec929de5a6aa4dd5bc40d85e4a2f68b08cc40c",
+    "src/data/plot_udds.py": "77addfa00916bec6dfda5caa9fd6ac4b22fd4a11c0a90083150977143bf69f1a",
+    "src/data/plot_wltc.py": "3f2cf355c71aec01272c334de8f794bea96f2837f2a62e47c6af13f98f550943",
+    "src/data/validate_phase1.py": "2fe2ae28395b1dd7c1294daac9bcc26fd0e14a6a97a86dd3198f017224c95e5d",
+    "src/environment/__init__.py": "45ac6fc04453c3cb94286be279fe437ec6e45880859a0699041b671a50221bea",
+    "src/environment/battery_model.py": "8c3b2b4e5f8a3de2b4fab3fa2e80f3aba2052cd019d7617c2dacf4bfacd8ad87",
+    "src/environment/constraints.py": "57b912620a2b9076248cd6593674537d9bf921c684ffe817b59bb848a2455488",
+    "src/environment/health_model.py": "5ffe75a45f7d75e3474bcce7fa8a4d5c09cbd3a7d598b7e17e944f0e627a286b",
+    "src/environment/integrated_powertrain.py": "09534c0c35124525af8e7af1a604e2a43357152949db699de9a78a20dde85869",
+    "src/environment/motor_efficiency_map.py": "107b9afa33981f4ef81bd05cb784b81c1231fa0307f10fb784251b2c0ad7f4e5",
+    "src/environment/motor_model.py": "c17e3c1665436c3d21172cbbbbd5a7a406218eb573d6c53e65fef9d5b79dd143",
+    "src/environment/motor_power.py": "e1708c2a79f1b2a1f23e4092cdc459b6e144f9ea573d917cd50dc5006c2203de",
+    "src/environment/reward.py": "88b8e520335015f35863611bc5439647a172a3422df9dd87e9c05abc45192e62",
+    "src/environment/rl_environment.py": "2e13fef0d28d6d911881ef7c51c503fd846af1eff0da16fe8aadb30ed877496d",
+    "src/environment/test_battery_model.py": "15521d979a95c05c769fbfd24c2fecf048fe1cb6a31fbe3749f228f9318c9af6",
+    "src/environment/test_constraint_integration.py": "02c0823fbee45dc3b743eb9b2925ccc9d90155465f3237032a5d61fc65908066",
+    "src/environment/test_constraints.py": "c8b69ccf6d617176ce315b64b8a6a37f4deddb647016d1c84c16090919e692b2",
+    "src/environment/test_feasible_sigma_bounds.py": "c7cfc9ee8ac2a3af44f39b4074320e3d39f2735edc100f5e009e1ce60d70250d",
+    "src/environment/test_health_model.py": "78430f32d60328b8707c387a7ad98a1de6b01e6de8f824a31bee1922d5cdabba",
+    "src/environment/test_integrated_health.py": "e55206de021f05f67118774e89cf0ecba01845b0bb0d1520e399eb88636c2256",
+    "src/environment/test_integrated_powertrain.py": "edfa81414cc0fa2dbcfc0e8990d39c1f7266a5f1eaf05ba633aab17aee7053d1",
+    "src/environment/test_motor_efficiency_map.py": "c97694e693c7df3c265906ffccb58f0044aeca9f985f788580d2d9b162615031",
+    "src/environment/test_motor_model.py": "3c0a467a7ce255e145779afc3c1ab361d5b5dc953cabdb67cac7358d1e11c820",
+    "src/environment/test_motor_power.py": "04ea3109bd0f0f314f464f2158eed85593958d3208ee24c66e8e7d39cee787eb",
+    "src/environment/test_phase3a_baseline.py": "b8070d83a6847542322fe793b5c1b02e6e961cab4d897c9f25abaaa5cf767559",
+    "src/environment/test_reward.py": "dd0083d59994cf72720aa539a81abdac9a17f75bb7b9ade7b678ee49d3db7038",
+    "src/environment/test_reward_integration.py": "b8f160c6aab95c360ca293f3ef29ecb937e60005a6223b3883032f191e772ca8",
+    "src/environment/test_rl_environment.py": "fe1e861c87c51ecb258aebcbdffff7a63336801409603f923080ba1a351ab416",
+    "src/environment/test_soh_clock.py": "ba29362a33a7a635e4f3d25d60ffb6c1f77fb8330367608c338928932dcf6a4b",
+    "src/environment/test_step_energy.py": "a27b7c7f95295785bb58df497ef56b2ddd3399ce2e89edd69307ff95a5ff19fe",
+    "src/environment/test_vehicle_dynamics.py": "03e56aa18d6683b4f7685ccbf8c15def84011f22a20aff3bd83d81f42d507fab",
+    "src/environment/vehicle_dynamics.py": "9e0f58f651c3b04f0428b2072cc928af5fb4bb37c2c9e77b18576d81a8c9ef8c",
+    "test_controlled_benchmark.py": "3e4dddca32d192a05a8d2250452ab4675da9f80ab90099d859053974e1a4eb03"
+  },
+  "map_sha256": {
+    "data/processed/motor_maps/motor1_efficiency_contours.csv": "653028d98a2651ddba8c65765852337f93f454f47c26871073236076b990e614",
+    "data/processed/motor_maps/motor2_efficiency_contours.csv": "ec6bff90865ca2d700b1606ea25282a6f9f42651105f5bf8481bc055c7f00fc3"
+  },
+  "cycle_sha256": {
+    "NEDC": {
+      "path": "/Users/yashgarg/Desktop/non2/ems_yash/data/raw/NEDC_raw.csv",
+      "sha256": "7748b2c3d87c17a362402c042a77b285916f23a8165835fb03f73d87cc1bb174"
+    },
+    "UDDS": {
+      "path": "/Users/yashgarg/Desktop/non2/ems_yash/data/raw/UDDS_raw.csv",
+      "sha256": "623cde2e998f4da6312f209ab719448648632d590612e28d941a1f12fd57e1f2"
+    },
+    "HWFET": {
+      "path": "/Users/yashgarg/Desktop/non2/ems_yash/data/raw/HWFET_raw.csv",
+      "sha256": "154818272f95412f9d091d64eea5223cbbcb9cefd28abe20db565b819bc48821"
+    },
+    "WLTC_Class3b": {
+      "path": "/Users/yashgarg/Desktop/non2/ems_yash/data/raw/WLTC_Class3b_raw.csv",
+      "sha256": "034fb51ae26db415cb02f7c32893004837169666fcf55c9380eb88d3bf899b58"
+    },
+    "CLTC_P": {
+      "path": "/Users/yashgarg/Desktop/non2/ems_yash/data/raw/CLTC_P_raw.csv",
+      "sha256": "606d11868b69d5efa2560180d6815d9eaecd01f66a211009a3d5cd9b98dd5853"
+    },
+    "FTP75": {
+      "path": "/Users/yashgarg/Desktop/non2/ems_yash/data/raw/FTP75_raw.csv",
+      "sha256": "3b00b5f68e4348de8a0c778bd80415dc759b6bd3f18625744ab01caf2802e1c7"
+    }
+  },
+  "completed_utc": "2026-09-26T20:15:24.107761+00:00",
+  "runtime_s": 45.78240183298476
+}

@@ -8,6 +8,7 @@ powertrain physics or reward model.
 
 from __future__ import annotations
 
+from dataclasses import asdict
 import numpy as np
 
 from src.environment.rl_environment import EnergyManagementEnv
@@ -39,6 +40,20 @@ def make_environment() -> EnergyManagementEnv:
     return EnergyManagementEnv(
         cycle=build_test_cycle()
     )
+
+
+def transition_state(env):
+    """Capture all state that a rejected pre-step transition must preserve."""
+    return {
+        "cycle_index": env.current_index,
+        "velocity_kmh": env.current_velocity_kmh,
+        "environment_time_s": env.simulation_time_s,
+        "plant_time_s": env.powertrain.simulation_time_s,
+        "observation": env.current_state.tolist(),
+        "reward_state": env._reward_state.tolist(),
+        "battery": asdict(env.powertrain.battery.state),
+        "health": env.powertrain.health_model.get_health_state(),
+    }
 
 
 def main() -> None:
@@ -150,7 +165,7 @@ def main() -> None:
     # environment constraint handling.
     env.powertrain.battery.state.soc = 0.1
 
-    current_index_before = env.current_index
+    state_before_rejection = transition_state(env)
 
     next_state, reward, terminated, truncated, info = env.step(
         np.array([0.5], dtype=np.float32)
@@ -167,7 +182,8 @@ def main() -> None:
 
     # The physical plant must not be advanced when the pre-step
     # constraint check rejects the state.
-    assert env.current_index == current_index_before + 1
+    assert transition_state(env) == state_before_rejection
+    np.testing.assert_array_equal(next_state, state_before_rejection["observation"])
 
     print("Violation:", info["violated_constraints"])
     print("Constraint stage:", info["constraint_stage"])
@@ -238,6 +254,7 @@ def main() -> None:
     env.constraint_checker = ForcedTorqueViolationChecker(
         original_checker
     )
+    state_before_rejection = transition_state(env)
 
     next_state, reward, terminated, truncated, info = env.step(
         np.array([0.5], dtype=np.float32)
@@ -250,6 +267,8 @@ def main() -> None:
     assert info["constraint_violation"] is True
     assert info["constraint_stage"] == "pre_step"
     assert "motor1_torque" in info["violated_constraints"]
+    assert transition_state(env) == state_before_rejection
+    np.testing.assert_array_equal(next_state, state_before_rejection["observation"])
 
     print("Violation:", info["violated_constraints"])
     print("Constraint stage:", info["constraint_stage"])

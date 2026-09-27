@@ -20,6 +20,15 @@ from dataclasses import dataclass
 import math
 
 
+def within_motor_limit(value: float, limit: float) -> bool:
+    """Compare a motor magnitude with only floating-point roundoff tolerance."""
+    magnitude = abs(value)
+    return math.isfinite(magnitude) and (
+        magnitude <= limit
+        or math.isclose(magnitude, limit, rel_tol=1e-12, abs_tol=1e-12)
+    )
+
+
 @dataclass
 class MotorParameters:
     """Parameters of one drive motor."""
@@ -88,6 +97,50 @@ class DualMotorModel:
     ):
         self.params = params or DualMotorParameters.from_wu_paper()
         self.wheel_radius_m = wheel_radius_m
+        if not math.isfinite(wheel_radius_m) or wheel_radius_m <= 0:
+            raise ValueError("Wheel radius must be finite and positive.")
+        for motor in (self.params.motor1, self.params.motor2):
+            if not math.isfinite(motor.gear_ratio) or motor.gear_ratio <= 0:
+                raise ValueError("Motor gear ratios must be finite and positive.")
+            if any(not math.isfinite(limit) or limit < 0 for limit in
+                   (motor.max_torque_nm, motor.max_speed_rpm)):
+                raise ValueError("Motor torque/speed limits must be finite and nonnegative.")
+
+    def calculate_feasible_sigma_bounds(
+        self,
+        velocity_kmh: float,
+        wheel_torque_nm: float,
+    ) -> tuple[float, float] | None:
+        """Return the full interval for the configured flat torque/speed limits.
+
+        Both traction and regeneration obey |sigma * Td / k1| <= T1max
+        and |(1-sigma) * Td / k2| <= T2max. None denotes an empty interval;
+        the wheel-driven shafts must satisfy speed limits even at zero torque.
+        """
+        if not math.isfinite(velocity_kmh) or not math.isfinite(wheel_torque_nm):
+            raise ValueError("Velocity and wheel torque must be finite.")
+        motor1, motor2 = self.params.motor1, self.params.motor2
+        for motor in (motor1, motor2):
+            speed = self.calculate_motor_speed(velocity_kmh, motor.gear_ratio)
+            if not within_motor_limit(speed, motor.max_speed_rpm):
+                return None
+
+        demand = abs(wheel_torque_nm)
+        if demand == 0:
+            return 0.0, 1.0
+        capacity1 = motor1.max_torque_nm * motor1.gear_ratio
+        capacity2 = motor2.max_torque_nm * motor2.gear_ratio
+        if not within_motor_limit(demand, capacity1 + capacity2):
+            return None
+        lower = max(0.0, 1.0 - capacity2 / demand)
+        upper = min(1.0, capacity1 / demand)
+        if lower > upper:
+            # At total capacity the two independently computed endpoints can
+            # differ by roundoff. Use their common numerical boundary.
+            if not math.isclose(lower, upper, rel_tol=1e-12, abs_tol=1e-12):
+                return None
+            lower = upper = (lower + upper) / 2.0
+        return lower, upper
 
     @staticmethod
     def vehicle_speed_to_wheel_speed_rpm(
@@ -211,17 +264,13 @@ class DualMotorModel:
         motor2_torque = torque["motor2_torque_nm"]
 
         motor1_feasible = (
-            abs(motor1_torque)
-            <= self.params.motor1.max_torque_nm
-            and abs(motor1_speed)
-            <= self.params.motor1.max_speed_rpm
+            within_motor_limit(motor1_torque, self.params.motor1.max_torque_nm)
+            and within_motor_limit(motor1_speed, self.params.motor1.max_speed_rpm)
         )
 
         motor2_feasible = (
-            abs(motor2_torque)
-            <= self.params.motor2.max_torque_nm
-            and abs(motor2_speed)
-            <= self.params.motor2.max_speed_rpm
+            within_motor_limit(motor2_torque, self.params.motor2.max_torque_nm)
+            and within_motor_limit(motor2_speed, self.params.motor2.max_speed_rpm)
         )
 
         return {

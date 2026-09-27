@@ -15,12 +15,16 @@ Validates:
 """
 
 import torch
+from pathlib import Path
+import sys
 
-from recurrent_encoder import RecurrentEncoder
-from self_attention import SelfAttention
-from history_encoder import HistoryEncoder
-from actor import Actor
-from critic import Critic
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from src.agent.recurrent_encoder import RecurrentEncoder
+from src.agent.self_attention import SelfAttention
+from src.agent.history_encoder import HistoryEncoder
+from src.agent.actor import Actor
+from src.agent.critic import Critic
 
 
 STATE_DIM = 6

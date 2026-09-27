@@ -132,6 +132,7 @@ def main() -> None:
     print("\nTEST 4 — One environment step")
 
     action = np.array([0.5], dtype=np.float32)
+    reward_state_before = env._reward_state.copy()
 
     next_state, reward, terminated, truncated, info = env.step(
         action
@@ -149,7 +150,9 @@ def main() -> None:
     assert env.observation_space.contains(next_state)
 
     assert isinstance(reward, float)
-    assert reward == 0.0
+    assert np.isfinite(reward)
+    assert reward == env.reward_model.compute(reward_state_before, env._reward_state)
+    assert reward == info["reward"]
 
     assert isinstance(terminated, bool)
     assert isinstance(truncated, bool)

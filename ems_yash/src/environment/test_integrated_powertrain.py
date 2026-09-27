@@ -1,6 +1,9 @@
 from pathlib import Path
+import sys
 
-from integrated_powertrain import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from src.environment.integrated_powertrain import (
     IntegratedPowertrain,
     IntegratedPowertrainParameters,
     default_motor_map_paths,

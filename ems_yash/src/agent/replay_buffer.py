@@ -23,6 +23,9 @@ History consists of previous state-action pairs:
      ...
      (s_{t-1}, a_{t-1})]
 
+Current and historical actions are the normalized [0, 1] actions supplied to
+the environment. Physical sigma_tor values are execution diagnostics only.
+
 At the beginning of an episode, missing history is
 zero-padded.
 """
@@ -153,7 +156,7 @@ class HistoricalReplayBuffer:
         done: bool,
     ) -> None:
         """
-        Store one transition.
+        Store one transition with normalized current and historical actions.
         """
 
         history = np.asarray(history, dtype=np.float32)

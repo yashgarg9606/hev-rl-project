@@ -45,7 +45,8 @@ from .health_model import (
     HealthDegradationModel,
     MotorHealthParameters,
 )
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from math import isclose, isfinite
 from pathlib import Path
 
 from .battery_model import (
@@ -65,7 +66,7 @@ from ..bms_interface import BMSHealthInterface, SOHSource
 class IntegratedPowertrainParameters:
     """Configuration for the complete Phase 2D plant."""
 
-    wheel_radius_m: float = 0.325
+    wheel_radius_m: float = 0.325  # Shared by vehicle torque and motor speed.
 
     battery_capacity_ah: float = 72.0
     battery_ocv_v: float = 255.5
@@ -93,7 +94,7 @@ class PowertrainStepResult:
     acceleration_mps2: float
     wheel_torque_nm: float
 
-    # Motor operating points
+    # Motor operating points at the midpoint speed used for step-average power.
     motor1_speed_rpm: float
     motor1_torque_nm: float
     motor1_efficiency_percent: float
@@ -143,6 +144,20 @@ class IntegratedPowertrain:
         parameters: IntegratedPowertrainParameters | None = None,
     ):
         self.parameters = parameters or IntegratedPowertrainParameters()
+        self.simulation_time_s = 0.0
+
+        radius = self.parameters.wheel_radius_m
+        if not isfinite(radius) or radius <= 0:
+            raise ValueError("Configured wheel radius must be finite and positive.")
+        if vehicle_parameters is None:
+            vehicle_parameters = VehicleParameters(wheel_radius_m=radius)
+        else:
+            vehicle_radius = vehicle_parameters.wheel_radius_m
+            if not isfinite(vehicle_radius) or vehicle_radius <= 0 or not isclose(
+                vehicle_radius, radius, rel_tol=1e-12, abs_tol=0.0,
+            ):
+                raise ValueError("Vehicle wheel radius must match the configured powertrain wheel radius.")
+            vehicle_parameters = replace(vehicle_parameters, wheel_radius_m=radius)
 
         self.vehicle = VehicleDynamics(
             params=vehicle_parameters
@@ -218,10 +233,10 @@ class IntegratedPowertrain:
         Parameters
         ----------
         velocity_kmh:
-            Current vehicle velocity.
+            Finite, nonnegative velocity at the start of the timestep.
 
         target_velocity_kmh:
-            Velocity at the end of the timestep.
+            Finite, nonnegative velocity at the end of the timestep.
 
         sigma_tor:
             Fraction of wheel torque assigned to Motor 1.
@@ -230,15 +245,30 @@ class IntegratedPowertrain:
             Road slope in radians.
 
         dt_s:
-            Simulation timestep.
+            Finite, positive simulation timestep. Returned health values are
+            sampled at the end of this timestep, using elapsed plant time.
 
         battery_temperature_c:
             Battery temperature used by the electrical
             parameterization. Defaults to configured temperature.
+
+        Notes
+        -----
+        Torque retains the vehicle model's existing road-load evaluation.
+        Motor power and efficiency use the arithmetic mean of the endpoint
+        speeds, giving the average mechanical power for this constant-torque,
+        constant-acceleration step. Both endpoints must satisfy motor limits.
         """
 
-        if dt_s <= 0:
-            raise ValueError("dt_s must be positive.")
+        if not isfinite(dt_s) or dt_s <= 0:
+            raise ValueError("dt_s must be finite and positive.")
+        if any(not isfinite(speed) or speed < 0 for speed in
+               (velocity_kmh, target_velocity_kmh)):
+            raise ValueError("Endpoint vehicle velocities must be finite and nonnegative.")
+
+        next_simulation_time_s = self.simulation_time_s + dt_s
+        if not isfinite(next_simulation_time_s):
+            raise ValueError("Elapsed simulation time must remain finite.")
 
         if battery_temperature_c is None:
             battery_temperature_c = (
@@ -264,21 +294,29 @@ class IntegratedPowertrain:
         )
 
         # --------------------------------------------------------------
-        # 2. Dual-motor operating point
+        # 2. Preflight both endpoint speeds before any physical state update.
+        # Speeds are nonnegative and linear across the timestep, so the larger
+        # endpoint is the strictest speed check; torque is constant this step.
         # --------------------------------------------------------------
 
-        motor_result = self.motors.calculate_operating_point(
-            velocity_kmh=velocity_kmh,
+        endpoint_motor_result = self.motors.calculate_operating_point(
+            velocity_kmh=max(velocity_kmh, target_velocity_kmh),
             wheel_torque_nm=wheel_torque,
             sigma_tor=sigma_tor,
         )
 
-        if not motor_result["overall_feasible"]:
+        if not endpoint_motor_result["overall_feasible"]:
             raise ValueError(
-                "Requested motor operating point is infeasible: "
-                f"M1 feasible={motor_result['motor1_feasible']}, "
-                f"M2 feasible={motor_result['motor2_feasible']}"
+                "Requested motor endpoint operating point is infeasible: "
+                f"M1 feasible={endpoint_motor_result['motor1_feasible']}, "
+                f"M2 feasible={endpoint_motor_result['motor2_feasible']}"
             )
+
+        motor_result = self.motors.calculate_operating_point(
+            velocity_kmh=0.5 * (velocity_kmh + target_velocity_kmh),
+            wheel_torque_nm=wheel_torque,
+            sigma_tor=sigma_tor,
+        )
 
         # --------------------------------------------------------------
         # 3. Motor electrical power
@@ -370,10 +408,10 @@ class IntegratedPowertrain:
             dt_s=dt_s,
         )
 
-        # Phase 3A: Get health state through BMS interface
-        health_state = self.health_interface.get_health_state()
+        # Physical and estimated health both describe the end of this step.
+        health_state = self.health_interface.get_health_state(next_simulation_time_s)
 
-        return PowertrainStepResult(
+        result = PowertrainStepResult(
             velocity_kmh=velocity_kmh,
             target_velocity_kmh=target_velocity_kmh,
             slope_rad=slope_rad,
@@ -437,6 +475,9 @@ class IntegratedPowertrain:
                 "overall_feasible"
             ],
         )
+
+        self.simulation_time_s = next_simulation_time_s
+        return result
 
 
 def default_motor_map_paths(
